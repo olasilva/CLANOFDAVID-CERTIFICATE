@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clan of David Academy — Certificate Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturMaguntia&family=Cinzel:wght@500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0b1a4a;
+    --navy-deep:#050d29;
+    --gold:#d4af37;
+    --gold-light:#f3dd8e;
+    --pink:#e6197f;
+    --pink-dark:#a8125c;
+    --red:#b91c2b;
+    --red-dark:#5c0e17;
+    --cyan:#12a3dd;
+    --cream:#fffdf8;
+    --ink:#141428;
+    --panel:#0b1330;
+    --panel-2:#111c40;
+    --line:rgba(255,255,255,0.10);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: radial-gradient(circle at 20% 0%, #16224f 0%, #060b1f 55%, #030614 100%);
+    font-family:'Poppins',sans-serif;
+    color:#e9ecf7;
+    min-height:100vh;
+  }
+  .topbar{
+    padding:22px clamp(16px,4vw,48px) 10px;
+    display:flex;
+    align-items:baseline;
+    gap:14px;
+    flex-wrap:wrap;
+  }
+  .topbar h1{
+    font-family:'Cinzel',serif;
+    font-size:clamp(20px,2.4vw,28px);
+    letter-spacing:0.04em;
+    margin:0;
+    background:linear-gradient(180deg,var(--gold-light),var(--gold));
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+  }
+  .topbar span{
+    font-size:12.5px;
+    color:#9aa4c7;
+    letter-spacing:0.03em;
+  }
+  .layout{
+    display:grid;
+    grid-template-columns: 400px 1fr;
+    gap:28px;
+    padding:10px clamp(16px,4vw,48px) 60px;
+    align-items:start;
+  }
+  @media (max-width:980px){
+    .layout{grid-template-columns:1fr;}
+  }
+
+  /* ---------- Control panel ---------- */
+  .panel{
+    background:linear-gradient(165deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:22px 22px 26px;
+    position:sticky;
+    top:20px;
+  }
+  .panel h2{
+    font-size:13px;
+    text-transform:uppercase;
+    letter-spacing:0.12em;
+    color:var(--gold-light);
+    margin:0 0 16px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .panel h2::before{
+    content:"";
+    width:6px;height:6px;border-radius:50%;
+    background:var(--pink);
+    display:inline-block;
+  }
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block;
+    font-size:12px;
+    color:#b9c1de;
+    margin-bottom:6px;
+    font-weight:500;
+  }
+  .field input, .field select{
+    width:100%;
+    padding:10px 12px;
+    border-radius:9px;
+    border:1px solid rgba(255,255,255,0.14);
+    background:rgba(255,255,255,0.05);
+    color:#f1f3fb;
+    font-family:'Poppins',sans-serif;
+    font-size:13.5px;
+    outline:none;
+    transition:border-color .15s, background .15s;
+  }
+  .field input::placeholder{color:#69719a;}
+  .field input:focus, .field select:focus{
+    border-color:var(--pink);
+    background:rgba(230,25,127,0.08);
+  }
+  .field select option{background:#111c40;color:#fff;}
+
+  .track-row{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:8px;
+    margin-bottom:16px;
+  }
+  .track-btn{
+    border:1px solid rgba(255,255,255,0.14);
+    background:rgba(255,255,255,0.04);
+    color:#c7cee6;
+    border-radius:9px;
+    padding:9px 4px;
+    font-size:11.5px;
+    font-weight:600;
+    letter-spacing:0.01em;
+    text-align:center;
+    cursor:pointer;
+    transition:all .15s;
+  }
+  .track-btn.active{
+    background:linear-gradient(135deg,var(--pink),var(--pink-dark));
+    border-color:var(--pink);
+    color:#fff;
+  }
+
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+  .btn{
+    width:100%;
+    padding:12px;
+    border-radius:10px;
+    border:none;
+    font-family:'Poppins',sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    cursor:pointer;
+    letter-spacing:0.01em;
+    transition:transform .12s, box-shadow .12s, opacity .12s;
+  }
+  .btn:active{transform:scale(0.98);}
+  .btn-primary{
+    background:linear-gradient(135deg,var(--gold-light),var(--gold));
+    color:#291c00;
+    box-shadow:0 6px 18px rgba(212,175,55,0.25);
+    margin-top:6px;
+  }
+  .btn-outline{
+    background:transparent;
+    border:1px solid rgba(255,255,255,0.18);
+    color:#dfe3f5;
+    margin-top:10px;
+  }
+  .btn-outline:hover{border-color:var(--pink);color:#fff;}
+  .btn-danger{
+    background:transparent;
+    border:1px solid rgba(233,66,66,0.4);
+    color:#ff9a9a;
+  }
+
+  .divider{height:1px;background:var(--line);margin:20px 0;}
+
+  /* ---------- Stage / preview ---------- */
+  .stage{min-width:0;}
+  .stage-toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:16px;
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .stage-toolbar .actions{display:flex;gap:10px;flex-wrap:wrap;}
+  .stage-toolbar button{
+    padding:9px 16px;
+    border-radius:8px;
+    border:1px solid rgba(255,255,255,0.16);
+    background:rgba(255,255,255,0.05);
+    color:#e9ecf7;
+    font-family:'Poppins',sans-serif;
+    font-size:12.5px;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .stage-toolbar button.primary{
+    background:linear-gradient(135deg,var(--gold-light),var(--gold));
+    color:#291c00;
+    border:none;
+  }
+
+  .cert-wrap{
+    background:#000;
+    border-radius:14px;
+    padding:clamp(10px,2vw,26px);
+    overflow:auto;
+  }
+
+  .certificate{
+    width:1300px;
+    height:919px;
+    margin:0 auto;
+    position:relative;
+    background:var(--cream);
+    border:14px solid var(--cyan);
+    box-shadow: inset 0 0 0 3px #fff, 0 20px 50px rgba(0,0,0,0.5);
+    overflow:hidden;
+    font-family:'Poppins',sans-serif;
+  }
+  .cert-scale-outer{ }
+
+  /* corner ribbon */
+  .corner{
+    position:absolute;
+    top:-40px;left:-120px;
+    width:520px;height:900px;
+    background:linear-gradient(135deg,#0a1440,#132a72 45%,#050a22 100%);
+    clip-path:polygon(0 0, 62% 0, 0 100%, 0% 100%);
+    z-index:1;
+  }
+  .corner::after{
+    content:"";
+    position:absolute;
+    top:0;left:0;width:100%;height:100%;
+    background:linear-gradient(135deg, transparent 46%, var(--gold) 48%, var(--gold-light) 50%, var(--gold) 52%, transparent 54%);
+    clip-path:polygon(0 0, 62% 0, 0 100%, 0% 100%);
+  }
+
+  /* gold seal top-left */
+  .gold-seal{
+    position:absolute;
+    top:330px; left:70px;
+    width:170px;height:170px;
+    border-radius:50%;
+    background:radial-gradient(circle at 35% 30%, var(--gold-light), var(--gold) 55%, #9c7a1d 100%);
+    border:5px solid #fff8e0;
+    box-shadow:0 8px 18px rgba(0,0,0,0.35);
+    z-index:2;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .gold-seal-inner{
+    width:118px;height:118px;
+    border-radius:50%;
+    border:3px dashed rgba(120,90,10,0.55);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .gold-seal svg{width:70px;height:70px;}
+
+  /* crest / logo top center - MODIFIED TO SHOW YOUR LOGO */
+  .crest{
+    position:absolute;
+    top:26px; left:50%;
+    transform:translateX(-50%);
+    z-index:3;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+  }
+  .crest .logo-img {
+    height: 140px;
+    width: auto;
+    max-width: 280px;
+    object-fit: contain;
+    filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+    margin-bottom: 2px;
+  }
+  .shield{
+    width:110px;
+  }
+  .ribbon{
+    margin-top:-10px;
+    background:linear-gradient(135deg,var(--pink),var(--pink-dark));
+    color:#fff;
+    font-family:'Cinzel',serif;
+    font-weight:700;
+    font-size:15px;
+    letter-spacing:0.08em;
+    padding:6px 22px;
+    clip-path:polygon(4% 0,96% 0,100% 50%,96% 100%,4% 100%,0% 50%);
+    box-shadow:0 4px 10px rgba(0,0,0,0.25);
+  }
+
+  .cert-body{
+    position:relative;
+    z-index:2;
+    text-align:center;
+    padding:190px 90px 0 210px;
+  }
+  .cert-title{
+    font-family:'UnifrakturMaguntia',cursive;
+    font-size:56px;
+    color:var(--navy);
+    margin:0 0 14px;
+  }
+  .presented-to{
+    color:var(--red);
+    font-size:19px;
+    font-weight:600;
+    margin-bottom:8px;
+  }
+  .name-line{
+    font-family:'Playfair Display',serif;
+    font-style:italic;
+    font-weight:700;
+    font-size:34px;
+    color:var(--ink);
+    border-bottom:2px solid #333;
+    display:inline-block;
+    min-width:640px;
+    padding-bottom:6px;
+    margin-bottom:22px;
+  }
+  .completion-label{
+    font-weight:700;
+    font-size:17px;
+    color:#111;
+    margin-bottom:14px;
+  }
+  .grade-course-line{
+    font-weight:700;
+    font-size:17px;
+    color:#111;
+    display:flex;
+    justify-content:center;
+    gap:10px;
+    align-items:baseline;
+    margin-bottom:14px;
+    flex-wrap:wrap;
+  }
+  .fill{
+    border-bottom:2px solid #333;
+    display:inline-block;
+    padding:0 6px 3px;
+    font-family:'Playfair Display',serif;
+    font-style:italic;
+    font-weight:700;
+    color:var(--pink-dark);
+    min-width:170px;
+  }
+  .date-line{
+    font-weight:700;
+    font-size:17px;
+    color:#111;
+    margin-bottom:16px;
+  }
+  .qualify-line{
+    font-family:'Cinzel',serif;
+    font-weight:700;
+    font-size:19px;
+    color:var(--navy);
+    letter-spacing:0.01em;
+    margin-bottom:6px;
+  }
+
+  .red-seal{
+    position:absolute;
+    bottom:120px;
+    left:50%;
+    transform:translateX(-50%);
+    width:150px;height:150px;
+    z-index:2;
+  }
+
+  .sign-row{
+    position:absolute;
+    bottom:118px;
+    left:210px; right:90px;
+    display:flex;
+    justify-content:space-between;
+    z-index:2;
+  }
+  .sign{
+    width:230px;
+    text-align:center;
+  }
+  .sign .line{
+    border-top:1.5px solid #333;
+    margin-bottom:8px;
+  }
+  .sign .label{
+    font-family:'Playfair Display',serif;
+    font-size:14px;
+    color:#222;
+  }
+
+  .track-tag{
+    position:absolute;
+    top:24px; right:34px;
+    font-family:'Cinzel',serif;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:0.08em;
+    color:#fff;
+    padding:6px 14px;
+    border-radius:20px;
+    z-index:4;
+  }
+  .serial{
+    position:absolute;
+    bottom:26px; right:40px;
+    font-size:10px;
+    color:#8a8a8a;
+    z-index:2;
+    font-family:'Poppins',sans-serif;
+  }
+
+  /* batch list */
+  .batch-list{margin-top:26px;}
+  .batch-item{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    background:rgba(255,255,255,0.04);
+    border:1px solid var(--line);
+    border-radius:9px;
+    padding:9px 12px;
+    margin-bottom:8px;
+    font-size:12.5px;
+  }
+  .batch-item .who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .batch-item .who b{color:#fff;}
+  .batch-item .who small{display:block;color:#9aa4c7;font-size:10.5px;}
+  .batch-item .acts{display:flex;gap:6px;flex-shrink:0;}
+  .batch-item .acts button{
+    border:none;background:rgba(255,255,255,0.08);
+    color:#e9ecf7;border-radius:6px;
+    width:26px;height:26px;
+    cursor:pointer;font-size:12px;
+  }
+  .batch-item .acts button:hover{background:rgba(255,255,255,0.18);}
+  .empty-note{font-size:12px;color:#7d86ad;text-align:center;padding:10px 0;}
+
+  /* scale wrapper so certificate fits smaller screens without breaking layout */
+  .cert-scale{
+    transform-origin:top left;
+  }
+
+  @media print{
+    body *{visibility:hidden;}
+    .cert-wrap, .cert-wrap *{visibility:visible;}
+    .cert-wrap{position:absolute;top:0;left:0;background:#fff;padding:0;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Clan of David — Art &amp; Music Academy</h1>
+  <span>Certificate of Merit Generator</span>
+</div>
+
+<div class="layout">
+
+  <!-- CONTROL PANEL -->
+  <div class="panel">
+    <h2>Student details</h2>
+
+    <div class="field">
+      <label for="studentName">Student name</label>
+      <input id="studentName" type="text" placeholder="e.g. Adaeze Okafor">
+    </div>
+
+    <div class="field">
+      <label>Track</label>
+      <div class="track-row">
+        <div class="track-btn active" data-track="Music Track">Music</div>
+        <div class="track-btn" data-track="Regular Track">Regular</div>
+        <div class="track-btn" data-track="Combined Track">Combined</div>
+      </div>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="grade">Grade / Level</label>
+        <input id="grade" type="text" placeholder="e.g. 3">
+      </div>
+      <div class="field">
+        <label for="course">Course</label>
+        <input id="course" type="text" placeholder="e.g. Piano">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="compDate">Date of completion</label>
+      <input id="compDate" type="date">
+    </div>
+
+    <h2 style="margin-top:22px;">Signatories (optional)</h2>
+    <div class="row2">
+      <div class="field">
+        <label for="coordinator">Training Coordinator</label>
+        <input id="coordinator" type="text" placeholder="Leave blank for pen signature">
+      </div>
+      <div class="field">
+        <label for="director">Director</label>
+        <input id="director" type="text" placeholder="Leave blank for pen signature">
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="addBtn">+ Add to batch</button>
+    <button class="btn btn-outline" id="clearFormBtn">Clear form</button>
+
+    <div class="divider"></div>
+
+    <h2>Batch (<span id="batchCount">0</span>)</h2>
+    <div class="batch-list" id="batchList">
+      <div class="empty-note">No certificates added yet.</div>
+    </div>
+    <button class="btn btn-outline" id="clearAllBtn" style="display:none;">Clear batch</button>
+  </div>
+
+  <!-- STAGE -->
+  <div class="stage">
+    <div class="stage-toolbar">
+      <div style="font-size:12.5px;color:#9aa4c7;">Live preview — updates as you type</div>
+      <div class="actions">
+        <button id="printBtn">Print current</button>
+        <button id="downloadOneBtn">Download PDF (current)</button>
+        <button id="downloadAllBtn" class="primary">Download all as PDF</button>
+      </div>
+    </div>
+
+    <div class="cert-wrap" id="certWrap">
+      <div class="cert-scale" id="certScale">
+        <div id="certificate" class="certificate">
+          <div class="corner"></div>
+
+          <div class="track-tag" id="trackTag" style="background:linear-gradient(135deg,var(--pink),var(--pink-dark));">MUSIC TRACK</div>
+
+          <!-- CREST WITH YOUR LOGO -->
+          <div class="crest">
+            <!-- YOUR LOGO IMAGE - replace src with your actual file path -->
+            <img class="logo-img" id="certLogoImg" src="img/IMG-20260531-WA0013 - Copy.jpg" alt="Clan of David Logo" onerror="this.style.display='none'">
+           
+          </div>
+
+          <div class="gold-seal">
+            <div class="gold-seal-inner">
+              <svg viewBox="0 0 64 64"><path d="M32 4 L38 22 L57 22 L42 33 L47 52 L32 41 L17 52 L22 33 L7 22 L26 22 Z" fill="#7a5c10"/></svg>
+            </div>
+          </div>
+
+          <div class="cert-body">
+            <h1 class="cert-title">Certificate of Merit</h1>
+            <div class="presented-to">This certificate is proudly presented to</div>
+            <div class="name-line" id="outName">Student Name</div>
+            <div class="completion-label">For the successful completion of</div>
+            <div class="grade-course-line">
+              <span>Grade</span><span class="fill" id="outGrade">—</span>
+              <span>of</span><span class="fill" id="outCourse">—</span><span>Course</span>
+            </div>
+            <div class="date-line">on this day <span class="fill" id="outDay" style="min-width:60px;">—</span> of year <span class="fill" id="outYear" style="min-width:80px;">—</span></div>
+            <div class="qualify-line">And has qualified for the next grade</div>
+          </div>
+
+          <svg class="red-seal" viewBox="0 0 100 100">
+            <defs>
+              <radialGradient id="rg" cx="40%" cy="35%" r="70%">
+                <stop offset="0%" stop-color="#e23b4a"/>
+                <stop offset="60%" stop-color="#b91c2b"/>
+                <stop offset="100%" stop-color="#5c0e17"/>
+              </radialGradient>
+            </defs>
+            <polygon points="50,2 57,16 71,10 71,26 86,29 76,41 86,53 71,56 71,72 57,66 50,80 43,66 29,72 29,56 14,53 24,41 14,29 29,26 29,10 43,16" fill="url(#rg)"/>
+            <circle cx="50" cy="41" r="22" fill="none" stroke="#f3dd8e" stroke-width="1.4"/>
+            <text x="50" y="38" text-anchor="middle" fill="#f3dd8e" font-size="8" font-family="Cinzel,serif">MERIT</text>
+            <text x="50" y="48" text-anchor="middle" fill="#f3dd8e" font-size="6.5" font-family="Cinzel,serif">C.O.D. ACADEMY</text>
+          </svg>
+
+          <div class="sign-row">
+            <div class="sign">
+              <div class="line"></div>
+              <div class="label" id="outCoordinator">Training Coordinator</div>
+            </div>
+            <div class="sign">
+              <div class="line"></div>
+              <div class="label" id="outDirector">Director</div>
+            </div>
+          </div>
+
+          <div class="serial" id="outSerial">No. COD-000000</div>
+        </div>
+      </div>
+    </div>
+
+<script>
+(function(){
+  const trackColors = {
+    "Music Track": ["#e6197f","#a8125c"],
+    "Regular Track": ["#12a3dd","#0b6f9c"],
+    "Combined Track": ["#d4af37","#9c7a1d"]
+  };
+  let currentTrack = "Music Track";
+  let batch = [];
+  let serialCounter = 1;
+
+  const $ = id => document.getElementById(id);
+
+  function ordinal(n){
+    const s=["th","st","nd","rd"], v=n%100;
+    return n+(s[(v-20)%10]||s[v]||s[0]);
+  }
+
+  function monthName(m){
+    return ["January","February","March","April","May","June","July","August","September","October","November","December"][m];
+  }
+
+  function genSerial(){
+    const s = "COD-" + String(serialCounter).padStart(6,"0");
+    serialCounter++;
+    return s;
+  }
+
+  function readForm(){
+    const dateVal = $("compDate").value;
+    let day="—", year="—";
+    if(dateVal){
+      const d = new Date(dateVal+"T00:00:00");
+      day = ordinal(d.getDate()) + " of " + monthName(d.getMonth());
+      year = d.getFullYear();
+    }
+    return {
+      name: $("studentName").value.trim() || "Student Name",
+      track: currentTrack,
+      grade: $("grade").value.trim() || "—",
+      course: $("course").value.trim() || "—",
+      day: day,
+      year: year,
+      coordinator: $("coordinator").value.trim() || "Training Coordinator",
+      director: $("director").value.trim() || "Director"
+    };
+  }
+
+  function renderPreview(data){
+    $("outName").textContent = data.name;
+    $("outGrade").textContent = data.grade;
+    $("outCourse").textContent = data.course;
+    $("outDay").textContent = data.day;
+    $("outYear").textContent = data.year;
+    $("outCoordinator").textContent = data.coordinator;
+    $("outDirector").textContent = data.director;
+
+    const tag = $("trackTag");
+    tag.textContent = data.track.toUpperCase();
+    const c = trackColors[data.track];
+    tag.style.background = `linear-gradient(135deg,${c[0]},${c[1]})`;
+  }
+
+  function updateLive(){
+    renderPreview(readForm());
+  }
+
+  document.querySelectorAll(".track-btn").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".track-btn").forEach(b=>b.classList.remove("active"));
+      btn.classList.add("active");
+      currentTrack = btn.dataset.track;
+      updateLive();
+    });
+  });
+
+  ["studentName","grade","course","compDate","coordinator","director"].forEach(id=>{
+    $(id).addEventListener("input", updateLive);
+  });
+
+  function refreshBatchList(){
+    const list = $("batchList");
+    $("batchCount").textContent = batch.length;
+    $("clearAllBtn").style.display = batch.length ? "block" : "none";
+    if(!batch.length){
+      list.innerHTML = '<div class="empty-note">No certificates added yet.</div>';
+      return;
+    }
+    list.innerHTML = "";
+    batch.forEach((item, idx)=>{
+      const row = document.createElement("div");
+      row.className = "batch-item";
+      row.innerHTML = `
+        <div class="who">
+          <b>${item.name}</b>
+          <small>${item.track} · Grade ${item.grade} · ${item.course}</small>
+        </div>
+        <div class="acts">
+          <button title="Preview" data-act="view" data-idx="${idx}">&#128065;</button>
+          <button title="Remove" data-act="del" data-idx="${idx}">&#10005;</button>
+        </div>`;
+      list.appendChild(row);
+    });
+  }
+
+  $("batchList").addEventListener("click", (e)=>{
+    const btn = e.target.closest("button");
+    if(!btn) return;
+    const idx = +btn.dataset.idx;
+    if(btn.dataset.act === "del"){
+      batch.splice(idx,1);
+      refreshBatchList();
+    } else if(btn.dataset.act === "view"){
+      const item = batch[idx];
+      renderPreview(item);
+      $("outSerial").textContent = "No. " + item.serial;
+    }
+  });
+
+  $("addBtn").addEventListener("click", ()=>{
+    const data = readForm();
+    if(!$("studentName").value.trim()){
+      $("studentName").focus();
+      $("studentName").style.borderColor = "#e64242";
+      setTimeout(()=>{ $("studentName").style.borderColor=""; }, 900);
+      return;
+    }
+    data.serial = genSerial();
+    batch.push(data);
+    refreshBatchList();
+    renderPreview(data);
+    $("outSerial").textContent = "No. " + data.serial;
+  });
+
+  $("clearFormBtn").addEventListener("click", ()=>{
+    $("studentName").value = "";
+    $("grade").value = "";
+    $("course").value = "";
+    $("compDate").value = "";
+    $("coordinator").value = "";
+    $("director").value = "";
+    updateLive();
+    $("outSerial").textContent = "No. COD-000000";
+  });
+
+  $("clearAllBtn").addEventListener("click", ()=>{
+    if(confirm("Clear the entire batch?")){
+      batch = [];
+      refreshBatchList();
+    }
+  });
+
+  $("printBtn").addEventListener("click", ()=> window.print());
+
+  async function exportCertificateToCanvas(){
+    return await html2canvas($("certificate"), {scale:2, useCORS:true, backgroundColor:"#ffffff"});
+  }
+
+  $("downloadOneBtn").addEventListener("click", async ()=>{
+    const btn = $("downloadOneBtn");
+    const original = btn.textContent;
+    btn.textContent = "Preparing…";
+    btn.disabled = true;
+    try{
+      const canvas = await exportCertificateToCanvas();
+      const img = canvas.toDataURL("image/jpeg", 0.95);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({orientation:"landscape", unit:"px", format:[1300,919]});
+      pdf.addImage(img, "JPEG", 0, 0, 1300, 919);
+      const name = ($("outName").textContent || "certificate").replace(/\s+/g,"_");
+      pdf.save(`${name}_certificate.pdf`);
+    } finally {
+      btn.textContent = original;
+      btn.disabled = false;
+    }
+  });
+
+  $("downloadAllBtn").addEventListener("click", async ()=>{
+    if(!batch.length){
+      alert("Add at least one student to the batch first.");
+      return;
+    }
+    const btn = $("downloadAllBtn");
+    const original = btn.textContent;
+    btn.disabled = true;
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({orientation:"landscape", unit:"px", format:[1300,919]});
+    for(let i=0; i<batch.length; i++){
+      btn.textContent = `Rendering ${i+1}/${batch.length}…`;
+      const item = batch[i];
+      renderPreview(item);
+      $("outSerial").textContent = "No. " + item.serial;
+      await new Promise(r=>setTimeout(r, 60));
+      const canvas = await exportCertificateToCanvas();
+      const img = canvas.toDataURL("image/jpeg", 0.95);
+      if(i>0) pdf.addPage([1300,919], "landscape");
+      pdf.addImage(img, "JPEG", 0, 0, 1300, 919);
+    }
+    pdf.save("clan_of_david_certificates_batch.pdf");
+    btn.textContent = original;
+    btn.disabled = false;
+  });
+
+  // init
+  updateLive();
+})();
+</script>
+
+</body>
+</html>
