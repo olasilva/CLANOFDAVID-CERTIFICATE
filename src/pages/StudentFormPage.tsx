@@ -57,7 +57,7 @@ export default function StudentFormPage({ onNavigate }: { onNavigate: (page: str
     setSubmitting(true);
     setError(null);
 
-    const { error: insertError } = await supabase.from('student_submissions').insert({
+    const insertPayload = {
       student_name: form.student_name.trim(),
       track: form.track,
       grade: form.grade.trim() || null,
@@ -65,10 +65,12 @@ export default function StudentFormPage({ onNavigate }: { onNavigate: (page: str
       completion_date: form.completion_date || null,
       coordinator: form.coordinator.trim() || null,
       director: form.director.trim() || null,
-      photo_url: form.photo_url || null,
       document_type: form.document_type,
       status: 'pending',
-    });
+      ...(form.photo_url ? { photo_url: form.photo_url } : {}),
+    };
+
+    const { error: insertError } = await supabase.from('student_submissions').insert(insertPayload);
 
     setSubmitting(false);
 
