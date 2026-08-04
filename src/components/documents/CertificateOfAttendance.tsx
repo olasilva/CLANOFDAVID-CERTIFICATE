@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import schoolLogo from '../../../img/IMG-20260531-WA0013 - Copy.jpg';
 
 interface CertificateOfAttendanceProps {
   studentName: string;
@@ -37,12 +38,11 @@ const CertificateOfAttendance = forwardRef<HTMLDivElement, CertificateOfAttendan
 
         <div className="relative h-full flex flex-col items-center justify-center px-20 text-center">
           <div className="mb-4">
-            <div className="w-16 h-16 rounded-full bg-[#2d6a4f] flex items-center justify-center mx-auto">
-              <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 12l2 2 4-4" />
-                <circle cx="12" cy="12" r="9" />
-              </svg>
-            </div>
+            <img
+              src={schoolLogo}
+              alt="Clan of David logo"
+              className="mx-auto h-20 w-20 rounded-full border-4 border-[#2d6a4f] bg-white object-cover p-1 shadow-sm"
+            />
           </div>
 
           <h1 className="text-[44px] font-bold tracking-[0.1em] text-[#2d6a4f] mb-1">

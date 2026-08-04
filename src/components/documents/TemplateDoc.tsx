@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import schoolLogo from '../../../img/IMG-20260531-WA0013 - Copy.jpg';
 
 interface TemplateDocProps {
   studentName: string;
@@ -40,13 +41,11 @@ const TemplateDoc = forwardRef<HTMLDivElement, TemplateDocProps>(
 
         <div className="relative h-full flex flex-col items-center justify-center px-20 text-center">
           <div className="mb-6">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#6366f1] to-[#ec4899] flex items-center justify-center mx-auto">
-              <svg viewBox="0 0 24 24" className="w-8 h-8 text-white" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <path d="M14 2v6h6" />
-                <path d="M9 13h6M9 17h6" />
-              </svg>
-            </div>
+            <img
+              src={schoolLogo}
+              alt="Clan of David logo"
+              className="mx-auto h-16 w-16 rounded-2xl border-2 border-[#8b5cf6] bg-white object-cover p-1 shadow-sm"
+            />
           </div>
 
           <h1 className="text-[48px] font-bold tracking-[0.12em] bg-gradient-to-r from-[#6366f1] via-[#8b5cf6] to-[#ec4899] bg-clip-text text-transparent mb-2">

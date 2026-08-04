@@ -1,5 +1,4 @@
 import { forwardRef } from 'react';
-import schoolLogo from '../../../img/IMG-20260531-WA0013 - Copy.jpg';
 
 interface IdCardFrontProps {
   studentName?: string;
@@ -11,7 +10,7 @@ interface IdCardFrontProps {
 }
 
 const IdCardFront = forwardRef<HTMLDivElement, IdCardFrontProps>(
-  ({ studentName, course, grade, studentId, studentPhoto, logoSrc = schoolLogo }, ref) => {
+  ({ studentName, course, grade, studentId, studentPhoto, logoSrc = '/logo.png' }, ref) => {
     return (
       <div
         ref={ref}

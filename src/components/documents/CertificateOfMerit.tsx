@@ -1,4 +1,5 @@
 import { forwardRef } from 'react';
+import schoolLogo from '../../../img/IMG-20260531-WA0013 - Copy.jpg';
 
 interface CertificateOfMeritProps {
   studentName: string;
@@ -48,13 +49,12 @@ const CertificateOfMerit = forwardRef<HTMLDivElement, CertificateOfMeritProps>(
         </div>
 
         <div className="relative h-full flex flex-col items-center justify-center px-20 text-center">
-          {/* Logo placeholder */}
           <div className="mb-4">
-            <div className="w-20 h-20 rounded-full border-4 border-[#c8a44d] flex items-center justify-center mx-auto">
-              <svg viewBox="0 0 24 24" className="w-10 h-10 text-[#c8a44d]" fill="currentColor">
-                <path d="M12 2L9 7L3 8L7.5 12.5L6 19L12 16L18 19L16.5 12.5L21 8L15 7L12 2Z" />
-              </svg>
-            </div>
+            <img
+              src={schoolLogo}
+              alt="Clan of David logo"
+              className="mx-auto h-20 w-20 rounded-full border-4 border-[#c8a44d] bg-white object-cover p-1 shadow-sm"
+            />
           </div>
 
           <h1 className="text-[52px] font-bold tracking-[0.15em] text-[#1a3a5c] mb-1">
