@@ -32,9 +32,31 @@ export default function StudentFormPage({ onNavigate }: { onNavigate: (page: str
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    try {
+      if (supabase) {
+        const extension = file.name.split('.').pop() || 'jpg';
+        const fileName = `student-photos/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+
+        const { data, error } = await supabase.storage.from('student-photos').upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true,
+        });
+
+        if (!error && data?.path) {
+          const { data: urlData } = supabase.storage.from('student-photos').getPublicUrl(data.path);
+          setForm((prev) => ({ ...prev, photo_url: urlData.publicUrl }));
+          return;
+        }
+
+        console.warn('Storage upload failed, falling back to local preview:', error);
+      }
+    } catch (uploadError) {
+      console.warn('Photo upload fallback triggered:', uploadError);
+    }
 
     const reader = new FileReader();
     reader.onload = () => {
@@ -48,6 +70,10 @@ export default function StudentFormPage({ onNavigate }: { onNavigate: (page: str
     e.preventDefault();
     if (!form.student_name.trim()) {
       setError('Please enter the student name.');
+      return;
+    }
+    if (form.document_type === 'id_card' && !form.photo_url.trim()) {
+      setError('Please upload a student photo before submitting this ID card request.');
       return;
     }
     if (!supabase) {
@@ -191,6 +217,9 @@ export default function StudentFormPage({ onNavigate }: { onNavigate: (page: str
                   <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
                 </label>
               </div>
+              <p className="mt-2 text-xs text-amber-700">
+                Photo is required for ID card submissions.
+              </p>
             </div>
           )}
 
