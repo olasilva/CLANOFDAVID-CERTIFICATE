@@ -3,6 +3,11 @@ import './style.css'
 const app = document.querySelector('#app')
 const year = String(new Date().getFullYear())
 
+// ============================================
+// FORMSPREE CONFIGURATION
+// ============================================
+const FORMSPREE_FORM_ID = 'YOUR_FORM_ID' // Replace with your actual Formspree form ID
+
 const documentTypes = [
   { id: 'merit', label: 'Certificate of Merit', short: 'Merit certificate' },
   { id: 'excellence', label: 'Certificate of Excellence', short: 'Excellence certificate' },
@@ -11,7 +16,7 @@ const documentTypes = [
 
 const state = {
   type: 'merit',
-  logo: '/images/logo.png', // Default logo path
+  logo: '/images/logo.png',
   photo: '',
   recipient: '',
   grade: '',
@@ -42,6 +47,291 @@ const idFields = [
   ['phone', 'Phone number', 'e.g. +234 706 809 8651'],
 ]
 
+// --- Notification System ---
+let submissions = []
+let notificationCount = 0
+
+// Load submissions from localStorage
+function loadSubmissions() {
+  const saved = localStorage.getItem('studentSubmissions')
+  if (saved) {
+    submissions = JSON.parse(saved)
+    renderSubmissionsList()
+    updateNotificationBadge()
+  }
+}
+
+// Save submissions to localStorage
+function saveSubmissions() {
+  localStorage.setItem('studentSubmissions', JSON.stringify(submissions))
+  updateNotificationBadge()
+}
+
+// Update notification badge
+function updateNotificationBadge() {
+  const badge = document.getElementById('notificationBadge')
+  const pending = submissions.filter(s => s.status === 'pending').length
+  notificationCount = pending
+  if (badge) {
+    if (pending > 0) {
+      badge.textContent = pending
+      badge.style.display = 'flex'
+      badge.classList.add('pulse')
+    } else {
+      badge.style.display = 'none'
+      badge.classList.remove('pulse')
+    }
+  }
+}
+
+// Add new submission
+function addSubmission(data) {
+  const newSubmission = {
+    id: data.id || Date.now() + Math.random() * 1000,
+    fullName: data.fullName || data.recipient || data['Full Name'] || 'Unknown',
+    email: data.email || data['Email'] || '',
+    phone: data.phone || data['Phone'] || '',
+    course: data.course || data['Course'] || '',
+    grade: data.grade || data['Grade'] || '',
+    studentId: data.studentId || data['Student ID'] || '',
+    message: data.message || data['Message'] || '',
+    photo: data.photo || data['Photo'] || '',
+    status: 'pending',
+    submittedAt: data.submittedAt || new Date().toISOString()
+  }
+  
+  const exists = submissions.some(s => s.id === newSubmission.id || 
+    (s.fullName === newSubmission.fullName && s.email === newSubmission.email))
+  
+  if (!exists) {
+    submissions.unshift(newSubmission)
+    saveSubmissions()
+    updateNotificationBadge()
+    showNotification(`📬 New submission from ${newSubmission.fullName}`)
+    renderSubmissionsList()
+  }
+}
+
+// Show notification toast
+function showNotification(message) {
+  const container = document.getElementById('notificationContainer')
+  if (!container) return
+  
+  const toast = document.createElement('div')
+  toast.className = 'notification-toast'
+  toast.innerHTML = `
+    <div class="toast-content">
+      <span class="toast-icon">📬</span>
+      <span class="toast-message">${message}</span>
+      <button class="toast-close" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
+  `
+  container.appendChild(toast)
+  
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.style.opacity = '0'
+      toast.style.transform = 'translateX(100px)'
+      setTimeout(() => toast.remove(), 300)
+    }
+  }, 5000)
+}
+
+// --- Render Submissions List ---
+function renderSubmissionsList() {
+  const list = document.getElementById('submissionsList')
+  if (!list) return
+  
+  const pending = submissions.filter(s => s.status === 'pending')
+  const approved = submissions.filter(s => s.status === 'approved')
+  const rejected = submissions.filter(s => s.status === 'rejected')
+  
+  // Update stats
+  const totalEl = document.getElementById('totalCount')
+  const pendingEl = document.getElementById('pendingCount')
+  const approvedEl = document.getElementById('approvedCount')
+  
+  if (totalEl) totalEl.textContent = submissions.length
+  if (pendingEl) pendingEl.textContent = pending.length
+  if (approvedEl) approvedEl.textContent = approved.length
+  
+  if (submissions.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <p>No submissions yet</p>
+        <p style="font-size: 13px; color: #9ca3af;">Share the student form link to start receiving applications</p>
+      </div>
+    `
+    return
+  }
+  
+  list.innerHTML = submissions.map((sub, index) => `
+    <div class="submission-card ${sub.status === 'pending' ? 'pending' : ''} ${sub.status === 'approved' ? 'approved' : ''} ${sub.status === 'rejected' ? 'rejected' : ''}" data-id="${sub.id}">
+      <div class="submission-header">
+        <div class="submission-info">
+          <span class="submission-number">#${index + 1}</span>
+          <span class="submission-name">${sub.fullName}</span>
+          <span class="submission-status ${sub.status}">
+            ${sub.status === 'pending' ? '⏳ Pending' : sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
+          </span>
+        </div>
+        <span class="submission-date">${new Date(sub.submittedAt).toLocaleString()}</span>
+      </div>
+      <div class="submission-details">
+        <div class="detail-row">
+          <span><strong>Email:</strong> ${sub.email || '—'}</span>
+          <span><strong>Phone:</strong> ${sub.phone || '—'}</span>
+        </div>
+        <div class="detail-row">
+          <span><strong>Course:</strong> ${sub.course || '—'}</span>
+          <span><strong>Grade:</strong> ${sub.grade || '—'}</span>
+          <span><strong>Student ID:</strong> ${sub.studentId || '—'}</span>
+        </div>
+        ${sub.message ? `<div class="detail-row"><strong>Message:</strong> ${sub.message}</div>` : ''}
+      </div>
+      <div class="submission-actions">
+        ${sub.status === 'pending' ? `
+          <button class="action-btn approve-btn" onclick="window.handleAction('${sub.id}', 'approve')" title="Approve">
+            ✅ Approve
+          </button>
+          <button class="action-btn reject-btn" onclick="window.handleAction('${sub.id}', 'reject')" title="Reject">
+            ❌ Reject
+          </button>
+        ` : ''}
+        <button class="action-btn certificate-btn" onclick="window.handleAction('${sub.id}', 'certificate')" title="Generate Certificate">
+          🎓 Certificate
+        </button>
+        <button class="action-btn delete-btn" onclick="window.handleAction('${sub.id}', 'delete')" title="Delete">
+          🗑️ Delete
+        </button>
+      </div>
+    </div>
+  `).join('')
+}
+
+// --- Handle Actions ---
+window.handleAction = function(id, action) {
+  const sub = submissions.find(s => s.id === id)
+  if (!sub) return
+  
+  switch(action) {
+    case 'approve':
+      sub.status = 'approved'
+      saveSubmissions()
+      renderSubmissionsList()
+      updateNotificationBadge()
+      showNotification(`✅ Approved: ${sub.fullName}`)
+      break
+    case 'reject':
+      sub.status = 'rejected'
+      saveSubmissions()
+      renderSubmissionsList()
+      updateNotificationBadge()
+      showNotification(`❌ Rejected: ${sub.fullName}`)
+      break
+    case 'delete':
+      if (confirm(`Delete submission from ${sub.fullName}?`)) {
+        submissions = submissions.filter(s => s.id !== id)
+        saveSubmissions()
+        renderSubmissionsList()
+        updateNotificationBadge()
+        showNotification(`🗑️ Deleted: ${sub.fullName}`)
+      }
+      break
+    case 'certificate':
+      // Populate the certificate form with student data
+      state.recipient = sub.fullName
+      state.course = sub.course
+      state.grade = sub.grade
+      state.studentId = sub.studentId || ''
+      
+      const recipientInput = document.querySelector('#in-recipient')
+      const courseInput = document.querySelector('#in-course')
+      const gradeInput = document.querySelector('#in-grade')
+      const studentIdInput = document.querySelector('#in-studentId')
+      
+      if (recipientInput) recipientInput.value = sub.fullName
+      if (courseInput) courseInput.value = sub.course
+      if (gradeInput) gradeInput.value = sub.grade
+      if (studentIdInput) studentIdInput.value = sub.studentId || ''
+      
+      state.type = 'merit'
+      renderDocuments()
+      renderForm()
+      renderPreview()
+      
+      showNotification(`🎓 Certificate ready for ${sub.fullName}`)
+      document.querySelector('.stage').scrollIntoView({ behavior: 'smooth' })
+      break
+  }
+}
+
+// Toggle notifications panel
+window.toggleNotifications = function() {
+  const panel = document.getElementById('submissionsPanel')
+  if (panel) {
+    panel.classList.toggle('expanded')
+  }
+}
+
+// Copy form link
+window.copyFormLink = function(url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const btns = document.querySelectorAll('[onclick*="copyFormLink"]')
+    btns.forEach(btn => {
+      const originalText = btn.textContent
+      btn.textContent = '✅ Copied!'
+      setTimeout(() => { btn.textContent = originalText }, 2000)
+    })
+  }).catch(() => {
+    const input = document.querySelector('.form-link-container input')
+    if (input) {
+      input.select()
+      document.execCommand('copy')
+    }
+  })
+}
+
+// Show form link
+function showFormLink() {
+  const formUrl = 'https://your-netlify-url.netlify.app' // Replace with your deployed form URL
+  
+  if (document.querySelector('.form-link-container')) return
+  
+  const container = document.createElement('div')
+  container.className = 'form-link-container'
+  container.innerHTML = `
+    <div style="background: #f0f9ff; border: 1px solid #b3d9ff; border-radius: 12px; padding: 16px; margin: 8px 0;">
+      <p style="font-size: 14px; font-weight: 600; color: #1a2240; margin: 0 0 8px 0;">
+        📤 Student Submission Form
+      </p>
+      <div style="display: flex; gap: 8px;">
+        <input type="text" value="${formUrl}" readonly 
+               style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: #fff;" />
+        <button onclick="window.copyFormLink('${formUrl}')" 
+                style="padding: 8px 16px; border: none; border-radius: 8px; background: #0798d1; color: #fff; cursor: pointer; font-weight: 600; white-space: nowrap;">
+          Copy Link
+        </button>
+        <button onclick="window.open('${formUrl}', '_blank')" 
+                style="padding: 8px 16px; border: none; border-radius: 8px; background: #10b981; color: #fff; cursor: pointer; font-weight: 600; white-space: nowrap;">
+          Open Form
+        </button>
+      </div>
+      <p style="font-size: 12px; color: #6b7280; margin: 6px 0 0 0;">
+        Share this link with students to collect submissions. They will appear here automatically.
+      </p>
+    </div>
+  `
+  
+  const panel = document.querySelector('.panel')
+  const notificationBell = document.querySelector('.notification-bell-wrapper')
+  if (panel && notificationBell) {
+    panel.insertBefore(container, notificationBell.nextSibling)
+  }
+}
+
+// --- App HTML ---
 app.innerHTML = `
   <div id="loader" class="loader" aria-label="Loading certificate studio">
     <div class="loader-mark">
@@ -54,25 +344,80 @@ app.innerHTML = `
     <div class="loader-bar"><span></span></div>
     <p>Preparing your document studio</p>
   </div>
+  
   <div class="app-shell" id="app-shell">
     <aside class="panel">
       <div class="brand">
         <div class="brand-mark">
           <img src="/images/logo.png" alt="Clan of David Logo" style="width:32px; height:32px; object-fit:contain;" />
         </div>
-        <div><strong>Document Studio</strong><small>Clan of David Academy</small></div>
+        <div>
+          <strong>Document Studio</strong>
+          <small>Clan of David Academy</small>
+        </div>
       </div>
-      <div class="panel-heading"><p class="eyebrow">Create a document</p><h1>Choose a template</h1><p class="hint">Enter the details, add your images, then download a finished document.</p></div>
+      
+      <!-- Notification Bell -->
+      <div class="notification-bell-wrapper">
+        <button class="notification-bell" id="notificationBell" onclick="window.toggleNotifications()">
+          🔔
+          <span class="notification-badge" id="notificationBadge">0</span>
+        </button>
+        <span class="notification-label">Submissions</span>
+      </div>
+      
+      <div class="panel-heading">
+        <p class="eyebrow">Create a document</p>
+        <h1>Choose a template</h1>
+        <p class="hint">Enter the details, add your images, then download a finished document.</p>
+      </div>
+      
+      <!-- Stats -->
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-number" id="totalCount">0</span>
+          <span class="stat-label">Total</span>
+        </div>
+        <div class="stat-item pending-stat">
+          <span class="stat-number" id="pendingCount">0</span>
+          <span class="stat-label">Pending</span>
+        </div>
+        <div class="stat-item approved-stat">
+          <span class="stat-number" id="approvedCount">0</span>
+          <span class="stat-label">Approved</span>
+        </div>
+      </div>
+      
       <div class="document-list" id="document-list"></div>
       <form class="form" id="form" autocomplete="off"></form>
     </aside>
+    
     <main class="stage">
-      <div class="stage-top"><div><p class="eyebrow">Live preview</p><h2 id="preview-title">Certificate of Merit</h2></div><span class="status"><i></i>Ready to download</span></div>
+      <!-- Submissions Panel -->
+      <div class="submissions-panel" id="submissionsPanel">
+        <div class="panel-header" onclick="window.toggleNotifications()">
+          <h3>📋 Student Submissions</h3>
+          <button class="refresh-btn" onclick="event.stopPropagation(); window.checkForNewSubmissions();">🔄 Refresh</button>
+        </div>
+        <div id="submissionsList"></div>
+      </div>
+      
+      <div class="stage-top">
+        <div>
+          <p class="eyebrow">Live preview</p>
+          <h2 id="preview-title">Certificate of Merit</h2>
+        </div>
+        <span class="status"><i></i>Ready to download</span>
+      </div>
       <div class="preview" id="preview"></div>
     </main>
   </div>
+  
+  <!-- Notification Container -->
+  <div id="notificationContainer"></div>
 `
 
+// Get DOM elements after app is rendered
 const loader = document.querySelector('#loader')
 const shell = document.querySelector('#app-shell')
 const list = document.querySelector('#document-list')
@@ -151,18 +496,76 @@ function certificateSvg(kind) {
 }
 
 function idCardSvg() {
-  // Process photo to be properly displayed as passport
   let photoElement = ''
   if (state.photo && state.photo !== '') {
-    // Use the image directly with preserveAspectRatio for passport-style
-    photoElement = `<image href="${state.photo}" x="172" y="188" width="216" height="216" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo)"/>`
+    photoElement = `<image href="${state.photo}" x="180" y="196" width="200" height="200" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo)"/>`
   } else {
-    photoElement = `<circle cx="280" cy="296" r="108" fill="#edf0f6"/><text x="280" y="302" text-anchor="middle" font-family="Arial" font-size="24" fill="#9ca3af">PHOTO</text>`
+    photoElement = `
+      <circle cx="280" cy="296" r="100" fill="#edf0f6"/>
+      <text x="280" y="292" text-anchor="middle" font-family="Arial" font-size="20" font-weight="700" fill="#9ca3af">PHOTO</text>
+      <text x="280" y="312" text-anchor="middle" font-family="Arial" font-size="10" fill="#9ca3af">(passport size)</text>
+    `
   }
   
   return `<svg class="document-svg id-svg" id="idcard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 760" role="img" aria-label="Student ID card">
-    <defs><linearGradient id="blue" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#182f88"/><stop offset="1" stop-color="#2748ae"/></linearGradient><linearGradient id="pink" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#9b136c"/><stop offset="1" stop-color="#e1198b"/></linearGradient><clipPath id="photo"><circle cx="280" cy="296" r="108"/></clipPath></defs>
-    <rect width="1120" height="760" fill="#e9edf5"/><g transform="translate(30 48)"><rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/><path d="M0 0h510v220c-135 25-287-15-510 18Z" fill="url(#blue)"/><path d="M0 18c115 32 230-5 365 25 70 15 105 6 145-8v45C355 105 190 62 0 78Z" fill="#fff" opacity=".15"/><g transform="translate(255 82)">${logoSvg(0, 0, 106, 78)}</g><text x="255" y="165" text-anchor="middle" font-family="Arial" font-size="28" font-weight="700" fill="#fff">CLAN OF DAVID</text><text x="255" y="194" text-anchor="middle" font-family="Arial" font-size="17" fill="#fff">ART AND MUSIC ACADEMY</text><circle cx="280" cy="296" r="116" fill="#fff" stroke="#781f5e" stroke-width="8"/><g clip-path="url(#photo)">${photoElement}</g><g font-family="Arial" font-size="20" fill="#172f83" font-weight="700"><text x="82" y="475">Name:</text><line x1="178" y1="480" x2="440" y2="480" stroke="#1e1e1e"/><text id="id-name" x="184" y="475" fill="#1e1e1e" font-weight="400">${value('recipient', '')}</text><text x="82" y="530">Course:</text><line x1="190" y1="535" x2="440" y2="535" stroke="#1e1e1e"/><text id="id-course" x="196" y="530" fill="#1e1e1e" font-weight="400">${value('course', '')}</text><text x="82" y="585">Grade:</text><line x1="178" y1="590" x2="440" y2="590" stroke="#1e1e1e"/><text id="id-grade" x="184" y="585" fill="#1e1e1e" font-weight="400">${value('grade', '')}</text><text x="55" y="640">Student ID:</text><line x1="190" y1="645" x2="440" y2="645" stroke="#1e1e1e"/><text id="id-studentId" x="196" y="640" fill="#1e1e1e" font-weight="400">${value('studentId', '')}</text></g></g><g transform="translate(580 48)"><rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/><path d="M0 0h510v105c-140 24-270-30-510 5Z" fill="url(#blue)"/><path d="M0 570c160-50 280 38 510-10v154H0Z" fill="url(#blue)"/><path d="M0 600c180-45 295 32 510-15v50C280 680 145 622 0 652Z" fill="url(#pink)"/><text x="255" y="185" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">This is to certify that the person</text><text x="255" y="215" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">whose name and photo appears</text><text x="255" y="245" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">on the over leaf is a student of</text><text x="255" y="315" text-anchor="middle" font-family="Arial" font-size="29" font-weight="700">CLAN OF DAVID</text><text x="255" y="345" text-anchor="middle" font-family="Arial" font-size="18">ART AND MUSIC ACADEMY</text><text x="255" y="405" text-anchor="middle" font-family="Arial" font-size="19">${value('phone', '+234 706 809 8651')}</text><text x="255" y="465" text-anchor="middle" font-family="Arial" font-size="17">This card must be</text><text x="255" y="492" text-anchor="middle" font-family="Arial" font-size="17">surrendered at the end of student session.</text><text x="255" y="540" text-anchor="middle" font-family="Arial" font-size="17">If found please return to the address above</text><text x="255" y="566" text-anchor="middle" font-family="Arial" font-size="17">or to the nearest police station.</text></g>
+    <defs>
+      <linearGradient id="blue" x1="0" y1="0" x2="1" y2="0">
+        <stop stop-color="#182f88"/>
+        <stop offset="1" stop-color="#2748ae"/>
+      </linearGradient>
+      <linearGradient id="pink" x1="0" y1="0" x2="1" y2="0">
+        <stop stop-color="#9b136c"/>
+        <stop offset="1" stop-color="#e1198b"/>
+      </linearGradient>
+      <clipPath id="photo">
+        <circle cx="280" cy="296" r="100"/>
+      </clipPath>
+    </defs>
+    
+    <rect width="1120" height="760" fill="#e9edf5"/>
+    
+    <g transform="translate(30 48)">
+      <rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/>
+      <path d="M0 0h510v190c-135 25-287-15-510 18Z" fill="url(#blue)"/>
+      <path d="M0 18c115 32 230-5 365 25 70 15 105 6 145-8v35C355 105 190 62 0 78Z" fill="#fff" opacity=".15"/>
+      <g transform="translate(255 65)">${logoSvg(0, 0, 85, 65)}</g>
+      <text x="255" y="148" text-anchor="middle" font-family="Arial" font-size="22" font-weight="700" fill="#fff">CLAN OF DAVID</text>
+      <text x="255" y="173" text-anchor="middle" font-family="Arial" font-size="14" fill="#fff">ART AND MUSIC ACADEMY</text>
+      <circle cx="280" cy="296" r="118" fill="#fff" stroke="#781f5e" stroke-width="6"/>
+      <circle cx="280" cy="296" r="108" fill="#f0f4f9" stroke="#e0e5ed" stroke-width="2"/>
+      <g clip-path="url(#photo)">${photoElement}</g>
+      <g font-family="Arial" font-size="18" fill="#172f83" font-weight="700">
+        <text x="70" y="475">Name:</text>
+        <text x="170" y="475" fill="#1e1e1e" font-weight="400">${value('recipient', '______________________')}</text>
+        <line x1="168" y1="482" x2="440" y2="482" stroke="#1e1e1e" stroke-dasharray="2,2"/>
+        <text x="70" y="525">Course:</text>
+        <text x="170" y="525" fill="#1e1e1e" font-weight="400">${value('course', '______________________')}</text>
+        <line x1="168" y1="532" x2="440" y2="532" stroke="#1e1e1e" stroke-dasharray="2,2"/>
+        <text x="70" y="575">Grade:</text>
+        <text x="170" y="575" fill="#1e1e1e" font-weight="400">${value('grade', '______________________')}</text>
+        <line x1="168" y1="582" x2="440" y2="582" stroke="#1e1e1e" stroke-dasharray="2,2"/>
+        <text x="55" y="625">Student ID:</text>
+        <text x="180" y="625" fill="#1e1e1e" font-weight="400">${value('studentId', '______________________')}</text>
+        <line x1="178" y1="632" x2="440" y2="632" stroke="#1e1e1e" stroke-dasharray="2,2"/>
+      </g>
+    </g>
+    
+    <g transform="translate(580 48)">
+      <rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/>
+      <path d="M0 0h510v105c-140 24-270-30-510 5Z" fill="url(#blue)"/>
+      <path d="M0 570c160-50 280 38 510-10v154H0Z" fill="url(#blue)"/>
+      <path d="M0 600c180-45 295 32 510-15v50C280 680 145 622 0 652Z" fill="url(#pink)"/>
+      <text x="255" y="185" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">This is to certify that the person</text>
+      <text x="255" y="215" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">whose name and photo appears</text>
+      <text x="255" y="245" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">on the over leaf is a student of</text>
+      <text x="255" y="315" text-anchor="middle" font-family="Arial" font-size="29" font-weight="700">CLAN OF DAVID</text>
+      <text x="255" y="345" text-anchor="middle" font-family="Arial" font-size="18">ART AND MUSIC ACADEMY</text>
+      <text x="255" y="405" text-anchor="middle" font-family="Arial" font-size="19">${value('phone', '+234 706 809 8651')}</text>
+      <text x="255" y="465" text-anchor="middle" font-family="Arial" font-size="17">This card must be</text>
+      <text x="255" y="492" text-anchor="middle" font-family="Arial" font-size="17">surrendered at the end of student session.</text>
+      <text x="255" y="540" text-anchor="middle" font-family="Arial" font-size="17">If found please return to the address above</text>
+      <text x="255" y="566" text-anchor="middle" font-family="Arial" font-size="17">or to the nearest police station.</text>
+    </g>
   </svg>`
 }
 
@@ -180,7 +583,6 @@ function renderForm() {
   const isId = state.type === 'idcard'
   const fields = isId ? idFields : certificateFields
   
-  // Only show photo upload for ID card, no logo upload
   let uploadHtml = ''
   if (isId) {
     uploadHtml = `<div class="upload-grid">
@@ -194,12 +596,21 @@ function renderForm() {
   
   form.innerHTML = `${uploadHtml}${fields.map(([id, label, placeholder]) => `<label class="field"><span>${label}</span><input id="in-${id}" type="text" placeholder="${placeholder}" value="${state[id]}"/></label>`).join('')}<button type="button" id="download" class="download">Download ${isId ? 'ID card (PDF with front & back)' : 'certificate'}</button>`
   
-  fields.forEach(([id]) => document.querySelector(`#in-${id}`).addEventListener('input', event => { state[id] = event.target.value; renderPreview() }))
+  fields.forEach(([id]) => {
+    const input = document.querySelector(`#in-${id}`)
+    if (input) {
+      input.addEventListener('input', event => { 
+        state[id] = event.target.value
+        renderPreview() 
+      })
+    }
+  })
   
   const photoInput = document.querySelector('#photo-input')
   if (photoInput) photoInput.addEventListener('change', event => readImage(event, 'photo'))
   
-  document.querySelector('#download').addEventListener('click', downloadDocument)
+  const downloadBtn = document.querySelector('#download')
+  if (downloadBtn) downloadBtn.addEventListener('click', downloadDocument)
 }
 
 function readImage(event, key) {
@@ -230,12 +641,10 @@ async function downloadDocument() {
 }
 
 async function downloadIdCardPDF() {
-  // Load html2pdf library dynamically
   if (typeof html2pdf === 'undefined') {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js')
   }
   
-  // Get the SVG element and create a canvas from it
   const svg = preview.querySelector('svg')
   const clone = svg.cloneNode(true)
   const viewBox = svg.viewBox.baseVal
@@ -249,7 +658,6 @@ async function downloadIdCardPDF() {
   
   await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject })
   
-  // Create a canvas with the full ID card
   const canvas = document.createElement('canvas')
   canvas.width = viewBox.width * 2
   canvas.height = viewBox.height * 2
@@ -259,10 +667,8 @@ async function downloadIdCardPDF() {
   context.drawImage(image, 0, 0, canvas.width, canvas.height)
   URL.revokeObjectURL(url)
   
-  // Convert to data URL
   const imgData = canvas.toDataURL('image/png')
   
-  // Create PDF with front and back
   const pdfElement = document.createElement('div')
   pdfElement.style.width = '595px'
   pdfElement.style.padding = '20px'
@@ -341,12 +747,23 @@ function loadScript(src) {
   })
 }
 
+// --- Check for new submissions manually ---
+window.checkForNewSubmissions = function() {
+  // For Formspree, submissions are emailed and stored in Formspree dashboard
+  // The admin can view them at https://formspree.io/forms
+  showNotification('📬 Submissions are sent to your email and Formspree dashboard')
+}
+
+// --- Initialize everything ---
 renderDocuments()
 renderForm()
 renderPreview()
 typewriterAnimation()
+showFormLink()
+
+loadSubmissions()
 
 window.setTimeout(() => { 
-  loader.classList.add('hidden'); 
+  loader.classList.add('hidden')
   shell.classList.add('ready') 
 }, 5000)
