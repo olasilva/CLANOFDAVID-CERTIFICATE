@@ -11,7 +11,7 @@ const documentTypes = [
 
 const state = {
   type: 'merit',
-  logo: '',
+  logo: '/images/logo.png', // Default logo path
   photo: '',
   recipient: '',
   grade: '',
@@ -44,13 +44,24 @@ const idFields = [
 
 app.innerHTML = `
   <div id="loader" class="loader" aria-label="Loading certificate studio">
-    <div class="loader-mark">COD</div>
+    <div class="loader-mark">
+      <img src="/images/logo.png" alt="Clan of David Logo" style="width:50px; height:50px; object-fit:contain;" />
+    </div>
+    <div class="loader-text">
+      <span id="typewriter-text"></span>
+      <span class="cursor">|</span>
+    </div>
     <div class="loader-bar"><span></span></div>
     <p>Preparing your document studio</p>
   </div>
   <div class="app-shell" id="app-shell">
     <aside class="panel">
-      <div class="brand"><div class="brand-mark">COD</div><div><strong>Document Studio</strong><small>Clan of David Academy</small></div></div>
+      <div class="brand">
+        <div class="brand-mark">
+          <img src="/images/logo.png" alt="Clan of David Logo" style="width:32px; height:32px; object-fit:contain;" />
+        </div>
+        <div><strong>Document Studio</strong><small>Clan of David Academy</small></div>
+      </div>
       <div class="panel-heading"><p class="eyebrow">Create a document</p><h1>Choose a template</h1><p class="hint">Enter the details, add your images, then download a finished document.</p></div>
       <div class="document-list" id="document-list"></div>
       <form class="form" id="form" autocomplete="off"></form>
@@ -69,6 +80,55 @@ const form = document.querySelector('#form')
 const preview = document.querySelector('#preview')
 const previewTitle = document.querySelector('#preview-title')
 
+// --- Typewriter Animation ---
+function typewriterAnimation() {
+  const textElement = document.getElementById('typewriter-text')
+  const fullText = 'CLAN OF DAVID ACADEMY'
+  let index = 0
+  let isDeleting = false
+  
+  function type() {
+    if (!textElement) return
+    
+    if (!isDeleting) {
+      // Typing phase
+      textElement.textContent = fullText.substring(0, index + 1)
+      index++
+      
+      if (index === fullText.length) {
+        // Pause at the end before deleting
+        setTimeout(() => {
+          isDeleting = true
+          setTimeout(type, 300)
+        }, 2000)
+        return
+      }
+      
+      // Random typing speed (30-60ms)
+      const delay = 30 + Math.random() * 30
+      setTimeout(type, delay)
+    } else {
+      // Deleting phase
+      textElement.textContent = fullText.substring(0, index - 1)
+      index--
+      
+      if (index === 0) {
+        isDeleting = false
+        // Pause before typing again
+        setTimeout(type, 1000)
+        return
+      }
+      
+      // Faster deletion speed
+      setTimeout(type, 15 + Math.random() * 20)
+    }
+  }
+  
+  // Start the animation
+  setTimeout(type, 500)
+}
+
+// --- Rest of the functions ---
 function escapeXml(value) {
   return String(value).replace(/[<>&'"]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[character])
 }
@@ -78,9 +138,12 @@ function value(id, fallback) {
 }
 
 function logoSvg(x, y, width = 100, height = 82) {
-  return state.logo
-    ? `<image href="${state.logo}" x="${x - width / 2}" y="${y - height / 2}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/>`
-    : `<g transform="translate(${x} ${y})"><rect x="-35" y="-32" width="70" height="64" rx="3" fill="#fff" stroke="#2923b9" stroke-width="4"/><text y="-4" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="#2521ad">COD</text><text y="14" text-anchor="middle" font-family="Arial" font-size="7" font-weight="700" fill="#e91b78">ART &amp; MUSIC</text></g>`
+  // Use the logo from state (which now defaults to /images/logo.png)
+  if (state.logo && state.logo !== '') {
+    return `<image href="${state.logo}" x="${x - width / 2}" y="${y - height / 2}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/>`
+  }
+  // Fallback text logo if no image
+  return `<g transform="translate(${x} ${y})"><rect x="-35" y="-32" width="70" height="64" rx="3" fill="#fff" stroke="#2923b9" stroke-width="4"/><text y="-4" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="#2521ad">COD</text><text y="14" text-anchor="middle" font-family="Arial" font-size="7" font-weight="700" fill="#e91b78">ART &amp; MUSIC</text></g>`
 }
 
 function certificateSvg(kind) {
@@ -171,4 +234,12 @@ async function downloadDocument() {
 renderDocuments()
 renderForm()
 renderPreview()
-window.setTimeout(() => { loader.classList.add('hidden'); shell.classList.add('ready') }, 900)
+
+// Start the typewriter animation
+typewriterAnimation()
+
+// Hide loader after 5 seconds (or when ready)
+window.setTimeout(() => { 
+  loader.classList.add('hidden'); 
+  shell.classList.add('ready') 
+}, 5000)
