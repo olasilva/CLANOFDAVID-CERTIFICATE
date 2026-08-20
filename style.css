@@ -143,3 +143,142 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
   .stage-top { display: none; }
   .document-svg { box-shadow: none; }
 }
+
+.download {
+  margin-top: 8px;
+  padding: 14px 18px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0798d1, #056da8);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 12px rgba(7, 152, 209, 0.3);
+  width: 100%;
+}
+
+.download:hover { 
+  transform: translateY(-1px); 
+  box-shadow: 0 6px 18px rgba(7, 152, 209, 0.4); 
+}
+
+.download:active { 
+  transform: translateY(0); 
+}
+
+/* PDF Preview styles */
+.pdf-preview-container {
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+@media print {
+  .panel { display: none; }
+  .stage { padding: 0; background: #fff; }
+  .stage-top { display: none; }
+  .document-svg { box-shadow: none; }
+}
+
+/* Add to your existing CSS */
+
+.loader-text {
+  margin: 8px 0 4px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #fff;
+  font-family: 'Cinzel', 'Georgia', serif;
+  letter-spacing: 2px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 50px;
+  justify-content: center;
+}
+
+.loader-text #typewriter-text {
+  display: inline-block;
+}
+
+.loader-text .cursor {
+  display: inline-block;
+  width: 3px;
+  height: 32px;
+  background: #0798d1;
+  animation: blink 0.8s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Make sure the loader stays centered */
+.loader {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg, #0a1a4f, #1b3a8c);
+  color: #fff;
+  text-align: center;
+  transition: opacity 0.5s ease, visibility 0.5s ease;
+}
+
+.loader-mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #0798d1, #252a91);
+  box-shadow: 0 8px 24px rgba(7, 152, 209, 0.4);
+  animation: pulse 1.4s ease-in-out infinite;
+  overflow: hidden;
+  padding: 6px;
+}
+
+.loader-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.loader-bar {
+  width: 280px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.2);
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.loader-bar span {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #0798d1, transparent);
+  animation: slide 1.2s ease-in-out infinite;
+}
+
+.loader p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.85;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+@keyframes slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
