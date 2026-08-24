@@ -6,7 +6,6 @@ const year = String(new Date().getFullYear())
 // ============================================
 // BACKEND API CONFIGURATION
 // ============================================
-// ✅ CORRECTED: Using your deployed backend URL
 const API_URL = 'https://formbackend-eqi9.vercel.app/api/submissions';
 
 const documentTypes = [
@@ -51,6 +50,8 @@ const idFields = [
 // --- Notification System ---
 let submissions = []
 let notificationCount = 0
+let lastFetchCount = 0
+let fetchInterval = null
 
 // Fetch submissions from backend
 async function fetchSubmissions() {
@@ -58,20 +59,38 @@ async function fetchSubmissions() {
     const response = await fetch(API_URL);
     if (response.ok) {
       const data = await response.json();
+      
+      // Check for new submissions
+      if (data.length > lastFetchCount && lastFetchCount > 0) {
+        const newSubmissions = data.slice(0, data.length - lastFetchCount);
+        newSubmissions.forEach(sub => {
+          if (sub.status === 'pending') {
+            showNotification(`📬 New submission from ${sub.fullName || 'Student'}`);
+            playNotificationSound();
+          }
+        });
+      }
+      
       submissions = data;
+      lastFetchCount = data.length;
       saveSubmissions();
       renderSubmissionsList();
       updateNotificationBadge();
-      if (data.length > 0) {
-        showNotification(`📬 Loaded ${data.length} submissions`);
-      }
     } else {
       console.error('Failed to fetch submissions');
     }
   } catch (error) {
     console.error('Error fetching submissions:', error);
-    showNotification('⚠️ Could not connect to backend');
   }
+}
+
+// Play notification sound
+function playNotificationSound() {
+  try {
+    const audio = new Audio('data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF');
+    audio.volume = 0.3;
+    audio.play().catch(() => {});
+  } catch (e) {}
 }
 
 // Save submissions to localStorage (cache)
@@ -85,17 +104,17 @@ function loadSubmissions() {
   const saved = localStorage.getItem('studentSubmissions');
   if (saved) {
     submissions = JSON.parse(saved);
+    lastFetchCount = submissions.length;
     renderSubmissionsList();
     updateNotificationBadge();
   }
-  // Always fetch fresh data from backend
   fetchSubmissions();
 }
 
 // Update notification badge
 function updateNotificationBadge() {
   const badge = document.getElementById('notificationBadge');
-  const pending = submissions.filter(s => s.status === 'pending').length;
+  const pending = submissions.filter(s => s.status === 'pending' && !s.read).length;
   notificationCount = pending;
   if (badge) {
     if (pending > 0) {
@@ -122,6 +141,7 @@ function addSubmission(data) {
     message: data.message || data['Message'] || '',
     photo: data.photo || data['Photo'] || '',
     status: 'pending',
+    read: false,
     submittedAt: data.submittedAt || new Date().toISOString()
   };
   
@@ -130,9 +150,11 @@ function addSubmission(data) {
   
   if (!exists) {
     submissions.unshift(newSubmission);
+    lastFetchCount = submissions.length;
     saveSubmissions();
     updateNotificationBadge();
     showNotification(`📬 New submission from ${newSubmission.fullName}`);
+    playNotificationSound();
     renderSubmissionsList();
   }
 }
@@ -235,15 +257,15 @@ function renderSubmissionsList() {
       </div>
       <div class="submission-details">
         <div class="detail-row">
-          <span><strong>Email:</strong> ${sub.email || '—'}</span>
-          <span><strong>Phone:</strong> ${sub.phone || '—'}</span>
+          <span><strong>📧 Email:</strong> ${sub.email || '—'}</span>
+          <span><strong>📱 Phone:</strong> ${sub.phone || '—'}</span>
         </div>
         <div class="detail-row">
-          <span><strong>Course:</strong> ${sub.course || '—'}</span>
-          <span><strong>Grade:</strong> ${sub.grade || '—'}</span>
-          <span><strong>Student ID:</strong> ${sub.studentId || '—'}</span>
+          <span><strong>📚 Course:</strong> ${sub.course || '—'}</span>
+          <span><strong>🎯 Grade:</strong> ${sub.grade || '—'}</span>
+          <span><strong>🆔 Student ID:</strong> ${sub.studentId || '—'}</span>
         </div>
-        ${sub.message ? `<div class="detail-row"><strong>Message:</strong> ${sub.message}</div>` : ''}
+        ${sub.message ? `<div class="detail-row message-row"><strong>💬 Message:</strong> ${sub.message}</div>` : ''}
         ${sub.photo ? `<div class="detail-row"><img src="${sub.photo}" alt="Student photo" style="max-width: 80px; max-height: 80px; border-radius: 8px; margin-top: 4px;" /></div>` : ''}
       </div>
       <div class="submission-actions">
@@ -254,7 +276,14 @@ function renderSubmissionsList() {
           <button class="action-btn reject-btn" onclick="window.handleAction('${sub.id}', 'reject')" title="Reject">
             ❌ Reject
           </button>
-        ` : ''}
+          <button class="action-btn mark-read-btn ${sub.read ? 'read' : ''}" onclick="window.handleAction('${sub.id}', 'markRead')" title="Mark as Read">
+            ${sub.read ? '📖 Read' : '📖 Mark as Read'}
+          </button>
+        ` : `
+          <span class="action-status ${sub.status === 'approved' ? 'approved-text' : 'rejected-text'}">
+            ${sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
+          </span>
+        `}
         <button class="action-btn certificate-btn" onclick="window.handleAction('${sub.id}', 'certificate')" title="Generate Certificate">
           🎓 Certificate
         </button>
@@ -276,31 +305,44 @@ window.handleAction = async function(id, action) {
       const approved = await updateStatus(id, 'approved');
       if (approved) {
         sub.status = 'approved';
+        sub.read = true;
         saveSubmissions();
         renderSubmissionsList();
         updateNotificationBadge();
         showNotification(`✅ Approved: ${sub.fullName}`);
+        playNotificationSound();
       }
       break;
     case 'reject':
       const rejected = await updateStatus(id, 'rejected');
       if (rejected) {
         sub.status = 'rejected';
+        sub.read = true;
         saveSubmissions();
         renderSubmissionsList();
         updateNotificationBadge();
         showNotification(`❌ Rejected: ${sub.fullName}`);
+        playNotificationSound();
       }
+      break;
+    case 'markRead':
+      sub.read = !sub.read;
+      saveSubmissions();
+      renderSubmissionsList();
+      updateNotificationBadge();
+      showNotification(sub.read ? `📖 Marked as read: ${sub.fullName}` : `📖 Marked as unread: ${sub.fullName}`);
       break;
     case 'delete':
       if (confirm(`Delete submission from ${sub.fullName}?`)) {
         const deleted = await deleteSubmission(id);
         if (deleted) {
           submissions = submissions.filter(s => s.id !== id);
+          lastFetchCount = submissions.length;
           saveSubmissions();
           renderSubmissionsList();
           updateNotificationBadge();
           showNotification(`🗑️ Deleted: ${sub.fullName}`);
+          playNotificationSound();
         }
       }
       break;
@@ -342,8 +384,8 @@ window.toggleNotifications = function() {
 
 // Refresh submissions
 window.refreshSubmissions = function() {
-  fetchSubmissions();
   showNotification('🔄 Refreshing submissions...');
+  fetchSubmissions();
 };
 
 // Copy form link
@@ -366,7 +408,6 @@ window.copyFormLink = function(url) {
 
 // Show form link
 function showFormLink() {
-  // ✅ CORRECTED: Using your deployed form URL
   const formUrl = 'https://codstudentform.netlify.app';
   
   if (document.querySelector('.form-link-container')) return;
@@ -823,6 +864,9 @@ typewriterAnimation();
 showFormLink();
 
 loadSubmissions();
+
+// Auto-refresh every 10 seconds
+setInterval(fetchSubmissions, 10000);
 
 window.setTimeout(() => { 
   loader.classList.add('hidden');

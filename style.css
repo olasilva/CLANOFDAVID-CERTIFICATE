@@ -477,7 +477,7 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
   border-radius: 10px;
   padding: 12px 14px;
   margin-bottom: 8px;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, background 0.2s;
 }
 
 .submission-card.pending {
@@ -562,50 +562,102 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
   padding: 2px 0;
 }
 
+/* ===== SUBMISSION ACTIONS ===== */
 .submission-actions {
   display: flex;
   gap: 6px;
   margin-top: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .submission-actions .action-btn {
-  padding: 4px 12px;
+  padding: 6px 14px;
   border: none;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.15s, opacity 0.2s;
+  transition: transform 0.15s, opacity 0.2s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .submission-actions .action-btn:hover {
   transform: translateY(-1px);
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .submission-actions .action-btn:active {
   transform: translateY(0);
 }
 
+/* Approve Button */
 .approve-btn {
   background: #d1fae5;
   color: #065f46;
+  border: 1px solid #a7f3d0;
 }
 
+.approve-btn:hover {
+  background: #a7f3d0;
+}
+
+/* Reject Button */
 .reject-btn {
   background: #fde8e8;
   color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
+.reject-btn:hover {
+  background: #fca5a5;
+}
+
+/* Certificate Button */
 .certificate-btn {
   background: #dbeafe;
   color: #1e40af;
+  border: 1px solid #bfdbfe;
 }
 
+.certificate-btn:hover {
+  background: #bfdbfe;
+}
+
+/* Delete Button */
 .delete-btn {
   background: #f3f4f6;
   color: #4b5563;
+  border: 1px solid #e5e7eb;
+}
+
+.delete-btn:hover {
+  background: #e5e7eb;
+}
+
+/* Action Status Text (after approve/reject) */
+.action-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.approved-text {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.rejected-text {
+  background: #fde8e8;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
 }
 
 /* ===== EMPTY STATE ===== */
@@ -647,17 +699,6 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
   transition: opacity 0.3s, transform 0.3s;
 }
 
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(100px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
 .notification-toast .toast-content {
   display: flex;
   align-items: center;
@@ -684,6 +725,17 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
 
 .notification-toast .toast-close:hover {
   color: #fff;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 /* ===== STAGE / PREVIEW ===== */
@@ -777,12 +829,15 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
   }
   .submission-actions .action-btn {
     font-size: 11px;
-    padding: 3px 8px;
+    padding: 4px 10px;
   }
   #notificationContainer {
     max-width: 300px;
     bottom: 16px;
     right: 16px;
+  }
+  .submissions-panel:not(.expanded) {
+    max-height: 50px;
   }
 }
 
@@ -807,6 +862,17 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
   .stat-number {
     font-size: 16px;
   }
+  .submission-actions {
+    gap: 4px;
+  }
+  .submission-actions .action-btn {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+  .action-status {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
 }
 
 /* ===== PRINT ===== */
@@ -828,3 +894,254 @@ body { margin: 0; min-width: 320px; min-height: 100vh; background: #f4f6fb; }
     display: none;
   }
 }
+/* Add to your style.css */
+
+/* Mark as Read Button */
+.mark-read-btn {
+  background: #e0e7ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+}
+
+.mark-read-btn:hover {
+  background: #c7d2fe;
+}
+
+.mark-read-btn.read {
+  background: #d1fae5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.mark-read-btn.read:hover {
+  background: #a7f3d0;
+}
+
+/* Improved Submission Card Design */
+.submission-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px 18px;
+  margin-bottom: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.submission-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
+}
+
+.submission-card.pending {
+  border-left: 5px solid #f59e0b;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.submission-card.approved {
+  border-left: 5px solid #10b981;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.submission-card.rejected {
+  border-left: 5px solid #ef4444;
+  background: linear-gradient(135deg, #fef2f2 0%, #ffffff 100%);
+}
+
+/* Submission Header */
+.submission-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.submission-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.submission-number {
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+
+.submission-name {
+  font-weight: 700;
+  color: #1a2240;
+  font-size: 15px;
+}
+
+/* Submission Details */
+.submission-details {
+  font-size: 13px;
+  color: #4b5563;
+  margin: 6px 0 8px;
+}
+
+.submission-details .detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 3px 0;
+}
+
+.submission-details .detail-row strong {
+  color: #1a2240;
+  font-weight: 600;
+}
+
+.message-row {
+  background: #f8fafc;
+  padding: 8px 12px !important;
+  border-radius: 6px;
+  margin-top: 4px;
+  width: 100%;
+}
+
+/* Action Buttons Container */
+.submission-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding-top: 10px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.submission-actions .action-btn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.submission-actions .action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.submission-actions .action-btn:active {
+  transform: translateY(0);
+}
+
+/* Action Status */
+.action-status {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 16px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.approved-text {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.rejected-text {
+  background: #fde8e8;
+  color: #991b1b;
+}
+
+/* Status Badge */
+.submission-status {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 14px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.submission-status.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.submission-status.approved {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.submission-status.rejected {
+  background: #fde8e8;
+  color: #991b1b;
+}
+
+/* Refresh Button */
+.refresh-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  background: #0798d1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-btn:hover {
+  background: #056da8;
+  transform: scale(1.02);
+}
+
+/* Stats Row Enhancement */
+.stats-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  padding: 6px 0 12px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 10px 6px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.stat-item:hover {
+  border-color: #0798d1;
+  background: #f0f9ff;
+}
+
+.stat-number {
+  display: block;
+  font-size: 24px;
+  font-weight: 800;
+  color: #0a1a4f;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.pending-stat .stat-number { color: #f59e0b; }
+.approved-stat .stat-number { color: #10b981; }
