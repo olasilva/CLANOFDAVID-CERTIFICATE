@@ -6,10 +6,8 @@ const year = String(new Date().getFullYear())
 // ============================================
 // BACKEND API CONFIGURATION
 // ============================================
-// For local development:
-const API_URL = 'http://localhost:5000/api/submissions';
-// For production (replace with your deployed backend URL):
-// const API_URL = 'https://your-backend-url.com/api/submissions';
+// ✅ CORRECTED: Using your deployed backend URL
+const API_URL = 'https://formbackend-eqi9.vercel.app/api/submissions';
 
 const documentTypes = [
   { id: 'merit', label: 'Certificate of Merit', short: 'Merit certificate' },
@@ -368,7 +366,8 @@ window.copyFormLink = function(url) {
 
 // Show form link
 function showFormLink() {
-  const formUrl = 'https://your-form-url.netlify.app'; // Replace with your actual form URL
+  // ✅ CORRECTED: Using your deployed form URL
+  const formUrl = 'https://codstudentform.netlify.app';
   
   if (document.querySelector('.form-link-container')) return;
   
