@@ -4,9 +4,12 @@ const app = document.querySelector('#app')
 const year = String(new Date().getFullYear())
 
 // ============================================
-// FORMSPREE CONFIGURATION
+// BACKEND API CONFIGURATION
 // ============================================
-const FORMSPREE_FORM_ID = 'YOUR_FORM_ID' // Replace with your actual Formspree form ID
+// For local development:
+const API_URL = 'http://localhost:5000/api/submissions';
+// For production (replace with your deployed backend URL):
+// const API_URL = 'https://your-backend-url.com/api/submissions';
 
 const documentTypes = [
   { id: 'merit', label: 'Certificate of Merit', short: 'Merit certificate' },
@@ -51,35 +54,59 @@ const idFields = [
 let submissions = []
 let notificationCount = 0
 
-// Load submissions from localStorage
-function loadSubmissions() {
-  const saved = localStorage.getItem('studentSubmissions')
-  if (saved) {
-    submissions = JSON.parse(saved)
-    renderSubmissionsList()
-    updateNotificationBadge()
+// Fetch submissions from backend
+async function fetchSubmissions() {
+  try {
+    const response = await fetch(API_URL);
+    if (response.ok) {
+      const data = await response.json();
+      submissions = data;
+      saveSubmissions();
+      renderSubmissionsList();
+      updateNotificationBadge();
+      if (data.length > 0) {
+        showNotification(`📬 Loaded ${data.length} submissions`);
+      }
+    } else {
+      console.error('Failed to fetch submissions');
+    }
+  } catch (error) {
+    console.error('Error fetching submissions:', error);
+    showNotification('⚠️ Could not connect to backend');
   }
 }
 
-// Save submissions to localStorage
+// Save submissions to localStorage (cache)
 function saveSubmissions() {
-  localStorage.setItem('studentSubmissions', JSON.stringify(submissions))
-  updateNotificationBadge()
+  localStorage.setItem('studentSubmissions', JSON.stringify(submissions));
+  updateNotificationBadge();
+}
+
+// Load submissions from localStorage
+function loadSubmissions() {
+  const saved = localStorage.getItem('studentSubmissions');
+  if (saved) {
+    submissions = JSON.parse(saved);
+    renderSubmissionsList();
+    updateNotificationBadge();
+  }
+  // Always fetch fresh data from backend
+  fetchSubmissions();
 }
 
 // Update notification badge
 function updateNotificationBadge() {
-  const badge = document.getElementById('notificationBadge')
-  const pending = submissions.filter(s => s.status === 'pending').length
-  notificationCount = pending
+  const badge = document.getElementById('notificationBadge');
+  const pending = submissions.filter(s => s.status === 'pending').length;
+  notificationCount = pending;
   if (badge) {
     if (pending > 0) {
-      badge.textContent = pending
-      badge.style.display = 'flex'
-      badge.classList.add('pulse')
+      badge.textContent = pending;
+      badge.style.display = 'flex';
+      badge.classList.add('pulse');
     } else {
-      badge.style.display = 'none'
-      badge.classList.remove('pulse')
+      badge.style.display = 'none';
+      badge.classList.remove('pulse');
     }
   }
 }
@@ -98,62 +125,92 @@ function addSubmission(data) {
     photo: data.photo || data['Photo'] || '',
     status: 'pending',
     submittedAt: data.submittedAt || new Date().toISOString()
-  }
+  };
   
   const exists = submissions.some(s => s.id === newSubmission.id || 
-    (s.fullName === newSubmission.fullName && s.email === newSubmission.email))
+    (s.fullName === newSubmission.fullName && s.email === newSubmission.email));
   
   if (!exists) {
-    submissions.unshift(newSubmission)
-    saveSubmissions()
-    updateNotificationBadge()
-    showNotification(`📬 New submission from ${newSubmission.fullName}`)
-    renderSubmissionsList()
+    submissions.unshift(newSubmission);
+    saveSubmissions();
+    updateNotificationBadge();
+    showNotification(`📬 New submission from ${newSubmission.fullName}`);
+    renderSubmissionsList();
   }
 }
 
 // Show notification toast
 function showNotification(message) {
-  const container = document.getElementById('notificationContainer')
-  if (!container) return
+  const container = document.getElementById('notificationContainer');
+  if (!container) return;
   
-  const toast = document.createElement('div')
-  toast.className = 'notification-toast'
+  const toast = document.createElement('div');
+  toast.className = 'notification-toast';
   toast.innerHTML = `
     <div class="toast-content">
       <span class="toast-icon">📬</span>
       <span class="toast-message">${message}</span>
       <button class="toast-close" onclick="this.parentElement.parentElement.remove()">×</button>
     </div>
-  `
-  container.appendChild(toast)
+  `;
+  container.appendChild(toast);
   
   setTimeout(() => {
     if (toast.parentElement) {
-      toast.style.opacity = '0'
-      toast.style.transform = 'translateX(100px)'
-      setTimeout(() => toast.remove(), 300)
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100px)';
+      setTimeout(() => toast.remove(), 300);
     }
-  }, 5000)
+  }, 5000);
+}
+
+// Update status in backend
+async function updateStatus(id, status) {
+  try {
+    const response = await fetch(`${API_URL}/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status })
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error updating status:', error);
+    return false;
+  }
+}
+
+// Delete from backend
+async function deleteSubmission(id) {
+  try {
+    const response = await fetch(`${API_URL}/${id}`, {
+      method: 'DELETE'
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Error deleting submission:', error);
+    return false;
+  }
 }
 
 // --- Render Submissions List ---
 function renderSubmissionsList() {
-  const list = document.getElementById('submissionsList')
-  if (!list) return
+  const list = document.getElementById('submissionsList');
+  if (!list) return;
   
-  const pending = submissions.filter(s => s.status === 'pending')
-  const approved = submissions.filter(s => s.status === 'approved')
-  const rejected = submissions.filter(s => s.status === 'rejected')
+  const pending = submissions.filter(s => s.status === 'pending');
+  const approved = submissions.filter(s => s.status === 'approved');
+  const rejected = submissions.filter(s => s.status === 'rejected');
   
   // Update stats
-  const totalEl = document.getElementById('totalCount')
-  const pendingEl = document.getElementById('pendingCount')
-  const approvedEl = document.getElementById('approvedCount')
+  const totalEl = document.getElementById('totalCount');
+  const pendingEl = document.getElementById('pendingCount');
+  const approvedEl = document.getElementById('approvedCount');
   
-  if (totalEl) totalEl.textContent = submissions.length
-  if (pendingEl) pendingEl.textContent = pending.length
-  if (approvedEl) approvedEl.textContent = approved.length
+  if (totalEl) totalEl.textContent = submissions.length;
+  if (pendingEl) pendingEl.textContent = pending.length;
+  if (approvedEl) approvedEl.textContent = approved.length;
   
   if (submissions.length === 0) {
     list.innerHTML = `
@@ -162,8 +219,8 @@ function renderSubmissionsList() {
         <p>No submissions yet</p>
         <p style="font-size: 13px; color: #9ca3af;">Share the student form link to start receiving applications</p>
       </div>
-    `
-    return
+    `;
+    return;
   }
   
   list.innerHTML = submissions.map((sub, index) => `
@@ -176,7 +233,7 @@ function renderSubmissionsList() {
             ${sub.status === 'pending' ? '⏳ Pending' : sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
           </span>
         </div>
-        <span class="submission-date">${new Date(sub.submittedAt).toLocaleString()}</span>
+        <span class="submission-date">${new Date(sub.submittedAt || sub.createdAt).toLocaleString()}</span>
       </div>
       <div class="submission-details">
         <div class="detail-row">
@@ -189,6 +246,7 @@ function renderSubmissionsList() {
           <span><strong>Student ID:</strong> ${sub.studentId || '—'}</span>
         </div>
         ${sub.message ? `<div class="detail-row"><strong>Message:</strong> ${sub.message}</div>` : ''}
+        ${sub.photo ? `<div class="detail-row"><img src="${sub.photo}" alt="Student photo" style="max-width: 80px; max-height: 80px; border-radius: 8px; margin-top: 4px;" /></div>` : ''}
       </div>
       <div class="submission-actions">
         ${sub.status === 'pending' ? `
@@ -207,108 +265,123 @@ function renderSubmissionsList() {
         </button>
       </div>
     </div>
-  `).join('')
+  `).join('');
 }
 
 // --- Handle Actions ---
-window.handleAction = function(id, action) {
-  const sub = submissions.find(s => s.id === id)
-  if (!sub) return
+window.handleAction = async function(id, action) {
+  const sub = submissions.find(s => s.id === id);
+  if (!sub) return;
   
   switch(action) {
     case 'approve':
-      sub.status = 'approved'
-      saveSubmissions()
-      renderSubmissionsList()
-      updateNotificationBadge()
-      showNotification(`✅ Approved: ${sub.fullName}`)
-      break
+      const approved = await updateStatus(id, 'approved');
+      if (approved) {
+        sub.status = 'approved';
+        saveSubmissions();
+        renderSubmissionsList();
+        updateNotificationBadge();
+        showNotification(`✅ Approved: ${sub.fullName}`);
+      }
+      break;
     case 'reject':
-      sub.status = 'rejected'
-      saveSubmissions()
-      renderSubmissionsList()
-      updateNotificationBadge()
-      showNotification(`❌ Rejected: ${sub.fullName}`)
-      break
+      const rejected = await updateStatus(id, 'rejected');
+      if (rejected) {
+        sub.status = 'rejected';
+        saveSubmissions();
+        renderSubmissionsList();
+        updateNotificationBadge();
+        showNotification(`❌ Rejected: ${sub.fullName}`);
+      }
+      break;
     case 'delete':
       if (confirm(`Delete submission from ${sub.fullName}?`)) {
-        submissions = submissions.filter(s => s.id !== id)
-        saveSubmissions()
-        renderSubmissionsList()
-        updateNotificationBadge()
-        showNotification(`🗑️ Deleted: ${sub.fullName}`)
+        const deleted = await deleteSubmission(id);
+        if (deleted) {
+          submissions = submissions.filter(s => s.id !== id);
+          saveSubmissions();
+          renderSubmissionsList();
+          updateNotificationBadge();
+          showNotification(`🗑️ Deleted: ${sub.fullName}`);
+        }
       }
-      break
+      break;
     case 'certificate':
       // Populate the certificate form with student data
-      state.recipient = sub.fullName
-      state.course = sub.course
-      state.grade = sub.grade
-      state.studentId = sub.studentId || ''
+      state.recipient = sub.fullName;
+      state.course = sub.course;
+      state.grade = sub.grade;
+      state.studentId = sub.studentId || '';
       
-      const recipientInput = document.querySelector('#in-recipient')
-      const courseInput = document.querySelector('#in-course')
-      const gradeInput = document.querySelector('#in-grade')
-      const studentIdInput = document.querySelector('#in-studentId')
+      const recipientInput = document.querySelector('#in-recipient');
+      const courseInput = document.querySelector('#in-course');
+      const gradeInput = document.querySelector('#in-grade');
+      const studentIdInput = document.querySelector('#in-studentId');
       
-      if (recipientInput) recipientInput.value = sub.fullName
-      if (courseInput) courseInput.value = sub.course
-      if (gradeInput) gradeInput.value = sub.grade
-      if (studentIdInput) studentIdInput.value = sub.studentId || ''
+      if (recipientInput) recipientInput.value = sub.fullName;
+      if (courseInput) courseInput.value = sub.course;
+      if (gradeInput) gradeInput.value = sub.grade;
+      if (studentIdInput) studentIdInput.value = sub.studentId || '';
       
-      state.type = 'merit'
-      renderDocuments()
-      renderForm()
-      renderPreview()
+      state.type = 'merit';
+      renderDocuments();
+      renderForm();
+      renderPreview();
       
-      showNotification(`🎓 Certificate ready for ${sub.fullName}`)
-      document.querySelector('.stage').scrollIntoView({ behavior: 'smooth' })
-      break
+      showNotification(`🎓 Certificate ready for ${sub.fullName}`);
+      document.querySelector('.stage').scrollIntoView({ behavior: 'smooth' });
+      break;
   }
-}
+};
 
 // Toggle notifications panel
 window.toggleNotifications = function() {
-  const panel = document.getElementById('submissionsPanel')
+  const panel = document.getElementById('submissionsPanel');
   if (panel) {
-    panel.classList.toggle('expanded')
+    panel.classList.toggle('expanded');
   }
-}
+};
+
+// Refresh submissions
+window.refreshSubmissions = function() {
+  fetchSubmissions();
+  showNotification('🔄 Refreshing submissions...');
+};
 
 // Copy form link
 window.copyFormLink = function(url) {
   navigator.clipboard.writeText(url).then(() => {
-    const btns = document.querySelectorAll('[onclick*="copyFormLink"]')
+    const btns = document.querySelectorAll('[onclick*="copyFormLink"]');
     btns.forEach(btn => {
-      const originalText = btn.textContent
-      btn.textContent = '✅ Copied!'
-      setTimeout(() => { btn.textContent = originalText }, 2000)
-    })
+      const originalText = btn.textContent;
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = originalText; }, 2000);
+    });
   }).catch(() => {
-    const input = document.querySelector('.form-link-container input')
+    const input = document.querySelector('.form-link-container input');
     if (input) {
-      input.select()
-      document.execCommand('copy')
+      input.select();
+      document.execCommand('copy');
     }
-  })
-}
+  });
+};
 
 // Show form link
 function showFormLink() {
-  const formUrl = 'https://your-netlify-url.netlify.app' // Replace with your deployed form URL
+  const formUrl = 'https://your-form-url.netlify.app'; // Replace with your actual form URL
   
-  if (document.querySelector('.form-link-container')) return
+  if (document.querySelector('.form-link-container')) return;
   
-  const container = document.createElement('div')
-  container.className = 'form-link-container'
+  const container = document.createElement('div');
+  container.className = 'form-link-container';
   container.innerHTML = `
     <div style="background: #f0f9ff; border: 1px solid #b3d9ff; border-radius: 12px; padding: 16px; margin: 8px 0;">
       <p style="font-size: 14px; font-weight: 600; color: #1a2240; margin: 0 0 8px 0;">
         📤 Student Submission Form
       </p>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
         <input type="text" value="${formUrl}" readonly 
-               style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: #fff;" />
+               style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: #fff; min-width: 150px;" />
         <button onclick="window.copyFormLink('${formUrl}')" 
                 style="padding: 8px 16px; border: none; border-radius: 8px; background: #0798d1; color: #fff; cursor: pointer; font-weight: 600; white-space: nowrap;">
           Copy Link
@@ -319,15 +392,15 @@ function showFormLink() {
         </button>
       </div>
       <p style="font-size: 12px; color: #6b7280; margin: 6px 0 0 0;">
-        Share this link with students to collect submissions. They will appear here automatically.
+        Share this link with students to collect submissions.
       </p>
     </div>
-  `
+  `;
   
-  const panel = document.querySelector('.panel')
-  const notificationBell = document.querySelector('.notification-bell-wrapper')
+  const panel = document.querySelector('.panel');
+  const notificationBell = document.querySelector('.notification-bell-wrapper');
   if (panel && notificationBell) {
-    panel.insertBefore(container, notificationBell.nextSibling)
+    panel.insertBefore(container, notificationBell.nextSibling);
   }
 }
 
@@ -357,7 +430,6 @@ app.innerHTML = `
         </div>
       </div>
       
-      <!-- Notification Bell -->
       <div class="notification-bell-wrapper">
         <button class="notification-bell" id="notificationBell" onclick="window.toggleNotifications()">
           🔔
@@ -372,7 +444,6 @@ app.innerHTML = `
         <p class="hint">Enter the details, add your images, then download a finished document.</p>
       </div>
       
-      <!-- Stats -->
       <div class="stats-row">
         <div class="stat-item">
           <span class="stat-number" id="totalCount">0</span>
@@ -393,11 +464,10 @@ app.innerHTML = `
     </aside>
     
     <main class="stage">
-      <!-- Submissions Panel -->
       <div class="submissions-panel" id="submissionsPanel">
         <div class="panel-header" onclick="window.toggleNotifications()">
           <h3>📋 Student Submissions</h3>
-          <button class="refresh-btn" onclick="event.stopPropagation(); window.checkForNewSubmissions();">🔄 Refresh</button>
+          <button class="refresh-btn" onclick="event.stopPropagation(); window.refreshSubmissions();">🔄 Refresh</button>
         </div>
         <div id="submissionsList"></div>
       </div>
@@ -413,78 +483,77 @@ app.innerHTML = `
     </main>
   </div>
   
-  <!-- Notification Container -->
   <div id="notificationContainer"></div>
-`
+`;
 
 // Get DOM elements after app is rendered
-const loader = document.querySelector('#loader')
-const shell = document.querySelector('#app-shell')
-const list = document.querySelector('#document-list')
-const form = document.querySelector('#form')
-const preview = document.querySelector('#preview')
-const previewTitle = document.querySelector('#preview-title')
+const loader = document.querySelector('#loader');
+const shell = document.querySelector('#app-shell');
+const list = document.querySelector('#document-list');
+const form = document.querySelector('#form');
+const preview = document.querySelector('#preview');
+const previewTitle = document.querySelector('#preview-title');
 
 // --- Typewriter Animation ---
 function typewriterAnimation() {
-  const textElement = document.getElementById('typewriter-text')
-  const fullText = 'CLAN OF DAVID ACADEMY'
-  let index = 0
-  let isDeleting = false
+  const textElement = document.getElementById('typewriter-text');
+  const fullText = 'CLAN OF DAVID ACADEMY';
+  let index = 0;
+  let isDeleting = false;
   
   function type() {
-    if (!textElement) return
+    if (!textElement) return;
     
     if (!isDeleting) {
-      textElement.textContent = fullText.substring(0, index + 1)
-      index++
+      textElement.textContent = fullText.substring(0, index + 1);
+      index++;
       
       if (index === fullText.length) {
         setTimeout(() => {
-          isDeleting = true
-          setTimeout(type, 300)
-        }, 2000)
-        return
+          isDeleting = true;
+          setTimeout(type, 300);
+        }, 2000);
+        return;
       }
       
-      const delay = 30 + Math.random() * 30
-      setTimeout(type, delay)
+      const delay = 30 + Math.random() * 30;
+      setTimeout(type, delay);
     } else {
-      textElement.textContent = fullText.substring(0, index - 1)
-      index--
+      textElement.textContent = fullText.substring(0, index - 1);
+      index--;
       
       if (index === 0) {
-        isDeleting = false
-        setTimeout(type, 1000)
-        return
+        isDeleting = false;
+        setTimeout(type, 1000);
+        return;
       }
       
-      setTimeout(type, 15 + Math.random() * 20)
+      setTimeout(type, 15 + Math.random() * 20);
     }
   }
   
-  setTimeout(type, 500)
+  setTimeout(type, 500);
 }
 
 // --- Rest of the functions ---
 function escapeXml(value) {
-  return String(value).replace(/[<>&'"]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[character])
+  return String(value).replace(/[<>&'"]/g, character => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[character]);
 }
 
 function value(id, fallback) {
-  return escapeXml(state[id].trim() || fallback)
+  return escapeXml(state[id].trim() || fallback);
 }
 
 function logoSvg(x, y, width = 100, height = 82) {
   if (state.logo && state.logo !== '') {
-    return `<image href="${state.logo}" x="${x - width / 2}" y="${y - height / 2}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/>`
+    return `<image href="${state.logo}" x="${x - width / 2}" y="${y - height / 2}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"/>`;
   }
-  return `<g transform="translate(${x} ${y})"><rect x="-35" y="-32" width="70" height="64" rx="3" fill="#fff" stroke="#2923b9" stroke-width="4"/><text y="-4" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="#2521ad">COD</text><text y="14" text-anchor="middle" font-family="Arial" font-size="7" font-weight="700" fill="#e91b78">ART &amp; MUSIC</text></g>`
+  return `<g transform="translate(${x} ${y})"><rect x="-35" y="-32" width="70" height="64" rx="3" fill="#fff" stroke="#2923b9" stroke-width="4"/><text y="-4" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="#2521ad">COD</text><text y="14" text-anchor="middle" font-family="Arial" font-size="7" font-weight="700" fill="#e91b78">ART &amp; MUSIC</text></g>`;
 }
 
 function certificateSvg(kind) {
-  const title = kind === 'excellence' ? 'Certificate of Excellence' : 'Certificate of Merit'
-  const seal = kind === 'excellence' ? 'EXCELLENCE' : 'MERIT'
+  const title = kind === 'excellence' ? 'Certificate of Excellence' : 'Certificate of Merit';
+  const seal = kind === 'excellence' ? 'EXCELLENCE' : 'MERIT';
   return `<svg class="document-svg" id="certificate" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 790" role="img" aria-label="${title}">
     <defs><linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17175c"/><stop offset=".5" stop-color="#252a91"/><stop offset="1" stop-color="#071271"/></linearGradient><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9c6c0f"/><stop offset=".5" stop-color="#fff19a"/><stop offset="1" stop-color="#b7801d"/></linearGradient><radialGradient id="red"><stop stop-color="#d53a32"/><stop offset="1" stop-color="#9c1515"/></radialGradient></defs>
     <rect width="1120" height="790" fill="#fff"/><path d="M0 0H336L198 395l138 395H0Z" fill="url(#ribbon)"/><path d="M130 0H336L198 395l138 395H130Z" fill="#2336af" opacity=".3"/><path d="M0 0h60l138 395L60 790H0Z" fill="#fff" opacity=".05"/><path d="M336 0 198 395l138 395" fill="none" stroke="url(#gold)" stroke-width="4"/>
@@ -492,19 +561,19 @@ function certificateSvg(kind) {
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".55" transform="translate(120 170)">${Array.from({ length: 11 }, (_, i) => `<path d="M-30 ${i * 6}C100 ${-84 + i * 6} 250 ${-82 + i * 6} 310 ${28 + i * 6}S212 ${240 + i * 6} 28 ${154 + i * 6}"/>`).join('')}</g>
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".5" transform="translate(740 470)">${Array.from({ length: 9 }, (_, i) => `<path d="M${20 - i * 6} ${i * 6}C100 ${-142 + i * 6} 280 ${-170 + i * 6} 378 ${-62 + i * 6}S384 ${74 + i * 6} 286 ${100 + i * 6}"/>`).join('')}</g>
     <g transform="translate(560 0)" text-anchor="middle">${logoSvg(0, 92, 108, 86)}<text y="226" font-family="Georgia,serif" font-size="45" font-weight="700" fill="#282a8f">${title}</text><text y="280" font-family="Arial" font-size="20" fill="#ee2424">This certificate is proudly presented to</text><text id="svg-recipient" y="350" font-family="Georgia,serif" font-size="39" font-weight="700" fill="#1e1e1e">${value('recipient', 'Recipient Name')}</text><line x1="-210" y1="370" x2="210" y2="370" stroke="#1e1e1e"/><text y="414" font-family="Arial" font-size="17" font-weight="700">For the successful completion of</text><text y="466" font-family="Arial" font-size="17">Grade <tspan id="svg-grade">${value('grade', '___')}</tspan> of <tspan id="svg-course">${value('course', '_______')}</tspan> Course</text><text y="506" font-family="Arial" font-size="17">on this day <tspan id="svg-day">${value('day', '__')}</tspan> of year <tspan id="svg-year">${value('year', '____')}</tspan></text><text y="556" font-family="Arial" font-size="20" font-weight="700" fill="#2a3192">And has qualified for the next grade</text><g transform="translate(0 690)" font-family="Georgia,serif" font-size="13"><line x1="-300" y1="0" x2="-150" y2="0" stroke="#b9760b" stroke-width="2"/><text id="svg-coordinator" x="-225" y="22">${value('coordinator', 'Training Coordinator')}</text><line x1="150" y1="0" x2="300" y2="0" stroke="#b9760b" stroke-width="2"/><text id="svg-director" x="225" y="22">${value('director', 'Director')}</text></g></g><g transform="translate(560 718)"><circle r="52" fill="url(#red)"/><circle r="40" fill="none" stroke="#781010"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="10" font-weight="700" fill="#fff">${seal}</text></g>
-  </svg>`
+  </svg>`;
 }
 
 function idCardSvg() {
-  let photoElement = ''
+  let photoElement = '';
   if (state.photo && state.photo !== '') {
-    photoElement = `<image href="${state.photo}" x="180" y="196" width="200" height="200" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo)"/>`
+    photoElement = `<image href="${state.photo}" x="180" y="196" width="200" height="200" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo)"/>`;
   } else {
     photoElement = `
       <circle cx="280" cy="296" r="100" fill="#edf0f6"/>
       <text x="280" y="292" text-anchor="middle" font-family="Arial" font-size="20" font-weight="700" fill="#9ca3af">PHOTO</text>
       <text x="280" y="312" text-anchor="middle" font-family="Arial" font-size="10" fill="#9ca3af">(passport size)</text>
-    `
+    `;
   }
   
   return `<svg class="document-svg id-svg" id="idcard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 760" role="img" aria-label="Student ID card">
@@ -566,24 +635,24 @@ function idCardSvg() {
       <text x="255" y="540" text-anchor="middle" font-family="Arial" font-size="17">If found please return to the address above</text>
       <text x="255" y="566" text-anchor="middle" font-family="Arial" font-size="17">or to the nearest police station.</text>
     </g>
-  </svg>`
+  </svg>`;
 }
 
 function renderDocuments() {
-  list.innerHTML = documentTypes.map(doc => `<button type="button" class="document-option ${state.type === doc.id ? 'active' : ''}" data-type="${doc.id}"><span class="option-icon">${doc.id === 'idcard' ? 'ID' : 'C'}</span><span><strong>${doc.label}</strong><small>${doc.short}</small></span><b>›</b></button>`).join('')
+  list.innerHTML = documentTypes.map(doc => `<button type="button" class="document-option ${state.type === doc.id ? 'active' : ''}" data-type="${doc.id}"><span class="option-icon">${doc.id === 'idcard' ? 'ID' : 'C'}</span><span><strong>${doc.label}</strong><small>${doc.short}</small></span><b>›</b></button>`).join('');
   list.querySelectorAll('[data-type]').forEach(button => button.addEventListener('click', () => {
-    state.type = button.dataset.type
-    renderDocuments()
-    renderForm()
-    renderPreview()
-  }))
+    state.type = button.dataset.type;
+    renderDocuments();
+    renderForm();
+    renderPreview();
+  }));
 }
 
 function renderForm() {
-  const isId = state.type === 'idcard'
-  const fields = isId ? idFields : certificateFields
+  const isId = state.type === 'idcard';
+  const fields = isId ? idFields : certificateFields;
   
-  let uploadHtml = ''
+  let uploadHtml = '';
   if (isId) {
     uploadHtml = `<div class="upload-grid">
       <label class="upload-field">
@@ -591,89 +660,89 @@ function renderForm() {
         <input id="photo-input" type="file" accept="image/*"/>
         <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Upload a clear passport-style photo</small>
       </label>
-    </div>`
+    </div>`;
   }
   
-  form.innerHTML = `${uploadHtml}${fields.map(([id, label, placeholder]) => `<label class="field"><span>${label}</span><input id="in-${id}" type="text" placeholder="${placeholder}" value="${state[id]}"/></label>`).join('')}<button type="button" id="download" class="download">Download ${isId ? 'ID card (PDF with front & back)' : 'certificate'}</button>`
+  form.innerHTML = `${uploadHtml}${fields.map(([id, label, placeholder]) => `<label class="field"><span>${label}</span><input id="in-${id}" type="text" placeholder="${placeholder}" value="${state[id]}"/></label>`).join('')}<button type="button" id="download" class="download">Download ${isId ? 'ID card (PDF with front & back)' : 'certificate'}</button>`;
   
   fields.forEach(([id]) => {
-    const input = document.querySelector(`#in-${id}`)
+    const input = document.querySelector(`#in-${id}`);
     if (input) {
       input.addEventListener('input', event => { 
-        state[id] = event.target.value
-        renderPreview() 
-      })
+        state[id] = event.target.value;
+        renderPreview();
+      });
     }
-  })
+  });
   
-  const photoInput = document.querySelector('#photo-input')
-  if (photoInput) photoInput.addEventListener('change', event => readImage(event, 'photo'))
+  const photoInput = document.querySelector('#photo-input');
+  if (photoInput) photoInput.addEventListener('change', event => readImage(event, 'photo'));
   
-  const downloadBtn = document.querySelector('#download')
-  if (downloadBtn) downloadBtn.addEventListener('click', downloadDocument)
+  const downloadBtn = document.querySelector('#download');
+  if (downloadBtn) downloadBtn.addEventListener('click', downloadDocument);
 }
 
 function readImage(event, key) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  const reader = new FileReader()
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
   reader.addEventListener('load', () => { 
-    state[key] = String(reader.result)
-    renderPreview() 
-  })
-  reader.readAsDataURL(file)
+    state[key] = String(reader.result);
+    renderPreview();
+  });
+  reader.readAsDataURL(file);
 }
 
 function renderPreview() {
-  const isId = state.type === 'idcard'
-  previewTitle.textContent = isId ? 'Student ID Card' : state.type === 'excellence' ? 'Certificate of Excellence' : 'Certificate of Merit'
-  preview.innerHTML = isId ? idCardSvg() : certificateSvg(state.type)
+  const isId = state.type === 'idcard';
+  previewTitle.textContent = isId ? 'Student ID Card' : state.type === 'excellence' ? 'Certificate of Excellence' : 'Certificate of Merit';
+  preview.innerHTML = isId ? idCardSvg() : certificateSvg(state.type);
 }
 
 async function downloadDocument() {
-  const isId = state.type === 'idcard'
+  const isId = state.type === 'idcard';
   
   if (isId) {
-    await downloadIdCardPDF()
+    await downloadIdCardPDF();
   } else {
-    await downloadCertificatePNG()
+    await downloadCertificatePNG();
   }
 }
 
 async function downloadIdCardPDF() {
   if (typeof html2pdf === 'undefined') {
-    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js')
+    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
   }
   
-  const svg = preview.querySelector('svg')
-  const clone = svg.cloneNode(true)
-  const viewBox = svg.viewBox.baseVal
-  clone.setAttribute('width', String(viewBox.width * 2))
-  clone.setAttribute('height', String(viewBox.height * 2))
+  const svg = preview.querySelector('svg');
+  const clone = svg.cloneNode(true);
+  const viewBox = svg.viewBox.baseVal;
+  clone.setAttribute('width', String(viewBox.width * 2));
+  clone.setAttribute('height', String(viewBox.height * 2));
   
-  const svgString = new XMLSerializer().serializeToString(clone)
-  const url = URL.createObjectURL(new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' }))
-  const image = new Image()
-  image.src = url
+  const svgString = new XMLSerializer().serializeToString(clone);
+  const url = URL.createObjectURL(new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' }));
+  const image = new Image();
+  image.src = url;
   
-  await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject })
+  await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
   
-  const canvas = document.createElement('canvas')
-  canvas.width = viewBox.width * 2
-  canvas.height = viewBox.height * 2
-  const context = canvas.getContext('2d')
-  context.fillStyle = '#ffffff'
-  context.fillRect(0, 0, canvas.width, canvas.height)
-  context.drawImage(image, 0, 0, canvas.width, canvas.height)
-  URL.revokeObjectURL(url)
+  const canvas = document.createElement('canvas');
+  canvas.width = viewBox.width * 2;
+  canvas.height = viewBox.height * 2;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  URL.revokeObjectURL(url);
   
-  const imgData = canvas.toDataURL('image/png')
+  const imgData = canvas.toDataURL('image/png');
   
-  const pdfElement = document.createElement('div')
-  pdfElement.style.width = '595px'
-  pdfElement.style.padding = '20px'
-  pdfElement.style.backgroundColor = '#ffffff'
-  pdfElement.style.fontFamily = 'Arial, sans-serif'
+  const pdfElement = document.createElement('div');
+  pdfElement.style.width = '595px';
+  pdfElement.style.padding = '20px';
+  pdfElement.style.backgroundColor = '#ffffff';
+  pdfElement.style.fontFamily = 'Arial, sans-serif';
   
   pdfElement.innerHTML = `
     <div style="text-align: center; margin-bottom: 10px;">
@@ -694,7 +763,7 @@ async function downloadIdCardPDF() {
       <p style="margin: 2px 0;">This card must be surrendered at the end of student session.</p>
       <p style="margin: 2px 0;">If found please return to the address above or to the nearest police station.</p>
     </div>
-  `
+  `;
   
   html2pdf()
     .set({
@@ -705,65 +774,58 @@ async function downloadIdCardPDF() {
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
     })
     .from(pdfElement)
-    .save()
+    .save();
 }
 
 async function downloadCertificatePNG() {
-  const svg = preview.querySelector('svg')
-  const clone = svg.cloneNode(true)
-  const viewBox = svg.viewBox.baseVal
-  clone.setAttribute('width', String(viewBox.width * 2))
-  clone.setAttribute('height', String(viewBox.height * 2))
-  const svgString = new XMLSerializer().serializeToString(clone)
-  const url = URL.createObjectURL(new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' }))
-  const image = new Image()
-  image.src = url
-  await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject })
-  const canvas = document.createElement('canvas')
-  canvas.width = viewBox.width * 2
-  canvas.height = viewBox.height * 2
-  const context = canvas.getContext('2d')
-  context.fillStyle = '#ffffff'
-  context.fillRect(0, 0, canvas.width, canvas.height)
-  context.drawImage(image, 0, 0, canvas.width, canvas.height)
-  URL.revokeObjectURL(url)
+  const svg = preview.querySelector('svg');
+  const clone = svg.cloneNode(true);
+  const viewBox = svg.viewBox.baseVal;
+  clone.setAttribute('width', String(viewBox.width * 2));
+  clone.setAttribute('height', String(viewBox.height * 2));
+  const svgString = new XMLSerializer().serializeToString(clone);
+  const url = URL.createObjectURL(new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' }));
+  const image = new Image();
+  image.src = url;
+  await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
+  const canvas = document.createElement('canvas');
+  canvas.width = viewBox.width * 2;
+  canvas.height = viewBox.height * 2;
+  const context = canvas.getContext('2d');
+  context.fillStyle = '#ffffff';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  URL.revokeObjectURL(url);
   canvas.toBlob(blob => {
-    const link = document.createElement('a')
-    const base = (state.recipient || state.type).trim().toLowerCase().replace(/\s+/g, '-') || state.type
-    link.download = `${base}-${state.type}.png`
-    link.href = URL.createObjectURL(blob)
-    link.click()
-    setTimeout(() => URL.revokeObjectURL(link.href), 1000)
-  }, 'image/png')
+    const link = document.createElement('a');
+    const base = (state.recipient || state.type).trim().toLowerCase().replace(/\s+/g, '-') || state.type;
+    link.download = `${base}-${state.type}.png`;
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  }, 'image/png');
 }
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    const script = document.createElement('script')
-    script.src = src
-    script.onload = resolve
-    script.onerror = reject
-    document.head.appendChild(script)
-  })
-}
-
-// --- Check for new submissions manually ---
-window.checkForNewSubmissions = function() {
-  // For Formspree, submissions are emailed and stored in Formspree dashboard
-  // The admin can view them at https://formspree.io/forms
-  showNotification('📬 Submissions are sent to your email and Formspree dashboard')
+    const script = document.createElement('script');
+    script.src = src;
+    script.onload = resolve;
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
 }
 
 // --- Initialize everything ---
-renderDocuments()
-renderForm()
-renderPreview()
-typewriterAnimation()
-showFormLink()
+renderDocuments();
+renderForm();
+renderPreview();
+typewriterAnimation();
+showFormLink();
 
-loadSubmissions()
+loadSubmissions();
 
 window.setTimeout(() => { 
-  loader.classList.add('hidden')
-  shell.classList.add('ready') 
-}, 5000)
+  loader.classList.add('hidden');
+  shell.classList.add('ready');
+}, 5000);

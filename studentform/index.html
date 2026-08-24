@@ -339,31 +339,27 @@
             <p class="subtitle">Clan of David <span>Art and Music Academy</span></p>
         </div>
 
-        <!-- REPLACE YOUR_FORM_ID with your actual Formspree form ID -->
-        <form id="studentForm" action="https://formspree.io/f/xzepoeed" method="POST">
-            <input type="hidden" name="_subject" value="New Student Submission" />
-            <input type="hidden" name="_captcha" value="true" />
-            
+        <form id="studentForm" enctype="multipart/form-data">
             <div class="form-group">
                 <label for="fullName">Full Name <span class="required">*</span></label>
-                <input type="text" id="fullName" name="Full Name" placeholder="e.g. Chidinma Eze" required />
+                <input type="text" id="fullName" name="fullName" placeholder="e.g. Chidinma Eze" required />
             </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label for="email">Email Address <span class="required">*</span></label>
-                    <input type="email" id="email" name="Email" placeholder="student@example.com" required />
+                    <input type="email" id="email" name="email" placeholder="student@example.com" required />
                 </div>
                 <div class="form-group">
                     <label for="phone">Phone Number</label>
-                    <input type="tel" id="phone" name="Phone" placeholder="e.g. +234 706 809 8651" />
+                    <input type="tel" id="phone" name="phone" placeholder="e.g. +234 706 809 8651" />
                 </div>
             </div>
 
             <div class="form-row">
                 <div class="form-group">
                     <label for="course">Course <span class="required">*</span></label>
-                    <select id="course" name="Course" required>
+                    <select id="course" name="course" required>
                         <option value="">Select a course</option>
                         <option value="Piano">Piano</option>
                         <option value="Violin">Violin</option>
@@ -378,7 +374,7 @@
                 </div>
                 <div class="form-group">
                     <label for="grade">Grade Level <span class="required">*</span></label>
-                    <select id="grade" name="Grade" required>
+                    <select id="grade" name="grade" required>
                         <option value="">Select grade</option>
                         <option value="Beginner">Beginner</option>
                         <option value="Grade 1">Grade 1</option>
@@ -396,18 +392,18 @@
 
             <div class="form-group">
                 <label for="studentId">Student ID (if applicable)</label>
-                <input type="text" id="studentId" name="Student ID" placeholder="e.g. COD-2026-001" />
+                <input type="text" id="studentId" name="studentId" placeholder="e.g. COD-2026-001" />
             </div>
 
             <div class="form-group">
                 <label for="message">Additional Information</label>
-                <textarea id="message" name="Message" placeholder="Any special requests, questions, or comments..."></textarea>
+                <textarea id="message" name="message" placeholder="Any special requests, questions, or comments..."></textarea>
             </div>
 
             <div class="form-group">
                 <label>Upload Passport Photo</label>
                 <div class="upload-area" id="uploadArea">
-                    <input type="file" id="photoUpload" name="Photo" accept="image/*" />
+                    <input type="file" id="photoUpload" name="photo" accept="image/*" />
                     <div class="upload-icon">📷</div>
                     <div class="upload-text">Drag & drop or <strong>click to upload</strong></div>
                     <div class="file-name" id="fileName"></div>
@@ -445,6 +441,13 @@
             const fileName = document.getElementById('fileName');
             const previewImage = document.getElementById('previewImage');
             const uploadArea = document.getElementById('uploadArea');
+
+            // ============================================
+            // BACKEND API CONFIGURATION
+            // ============================================
+            // For local development:
+            const API_URL = 'https://formbackend-eqi9.vercel.app/';
+           
 
             // Photo upload handling
             photoInput.addEventListener('change', function(e) {
@@ -484,7 +487,7 @@
                 }
             });
 
-            // Form submission to Formspree
+            // Form submission to backend
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 successMessage.classList.remove('show');
@@ -496,15 +499,13 @@
                 const formData = new FormData(form);
 
                 try {
-                    const response = await fetch(form.action, {
+                    const response = await fetch(API_URL, {
                         method: 'POST',
-                        body: formData,
-                        headers: {
-                            'Accept': 'application/json'
-                        }
+                        body: formData
                     });
 
                     if (response.ok) {
+                        const result = await response.json();
                         successMessage.classList.add('show');
                         form.reset();
                         fileName.textContent = '';
