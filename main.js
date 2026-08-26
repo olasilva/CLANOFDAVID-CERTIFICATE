@@ -6,11 +6,13 @@ const year = String(new Date().getFullYear())
 // ============================================
 // BACKEND API CONFIGURATION
 // ============================================
-const API_URL = 'https://formbackend-eqi9.vercel.app/api/submissions';
+const BACKEND_ORIGIN = 'https://formbackend-eqi9.vercel.app';
+const API_URL = `${BACKEND_ORIGIN}/api/submissions`;
 
 const documentTypes = [
   { id: 'merit', label: 'Certificate of Merit', short: 'Merit certificate' },
   { id: 'excellence', label: 'Certificate of Excellence', short: 'Excellence certificate' },
+  { id: 'attendance', label: 'Certificate of Attendance', short: 'Attendance certificate' },
   { id: 'idcard', label: 'Student ID Card', short: 'Student ID card' },
 ]
 
@@ -18,6 +20,8 @@ const state = {
   type: 'merit',
   logo: '/images/logo.png',
   photo: '',
+  coordinatorSignature: '',
+  directorSignature: '',
   recipient: '',
   grade: '',
   course: '',
@@ -30,7 +34,7 @@ const state = {
 }
 
 const certificateFields = [
-  ['recipient', 'Recipient name', 'e.g. Sarah Johnson'],
+  ['recipient', 'Recipient name', 'e.g. Ben Glory'],
   ['grade', 'Grade', 'e.g. 5'],
   ['course', 'Course', 'e.g. Piano'],
   ['day', 'Day', 'e.g. 12'],
@@ -40,7 +44,7 @@ const certificateFields = [
 ]
 
 const idFields = [
-  ['recipient', 'Student name', 'e.g. Sarah Johnson'],
+  ['recipient', 'Student name', 'e.g. Gen Glory'],
   ['course', 'Course', 'e.g. Piano'],
   ['grade', 'Grade', 'e.g. 5'],
   ['studentId', 'Student ID', 'e.g. COD-2026-001'],
@@ -52,36 +56,115 @@ let submissions = []
 let notificationCount = 0
 let lastFetchCount = 0
 let fetchInterval = null
+let isFetching = false
+
+// Resolve a photo path returned by the backend into a usable <img> src.
+// The API returns relative paths like "/uploads/photo-....jpeg" which need
+// the backend origin prefixed, or already-absolute/data URLs which pass through.
+function resolvePhotoUrl(photo) {
+  if (!photo) return '';
+  if (photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:')) {
+    return photo;
+  }
+  return `${BACKEND_ORIGIN}${photo.startsWith('/') ? '' : '/'}${photo}`;
+}
+
+// Normalize a raw backend submission (snake_case) into the shape the UI expects.
+function normalizeSubmission(raw) {
+  return {
+    id: raw.id,
+    fullName: raw.fullName || raw.full_name || raw.name || 'Unknown',
+    email: raw.email || '',
+    phone: raw.phone || '',
+    course: raw.course || '',
+    grade: raw.grade || '',
+    studentId: raw.studentId || raw.student_id || '',
+    message: raw.message || '',
+    photo: raw.photo || '',
+    status: raw.status || 'pending',
+    read: false,
+    submittedAt: raw.submittedAt || raw.created_at || raw.createdAt || new Date().toISOString(),
+  };
+}
 
 // Fetch submissions from backend
-async function fetchSubmissions() {
+async function fetchSubmissions(manual = false) {
+  if (isFetching) return;
+  isFetching = true;
+  setRefreshLoading(true);
+
   try {
     const response = await fetch(API_URL);
     if (response.ok) {
-      const data = await response.json();
-      
+      const raw = await response.json();
+
+      // Normalize field names and preserve each item's local "read" flag across refreshes.
+      const normalized = raw.map(item => {
+        const existing = submissions.find(s => s.id === item.id);
+        const n = normalizeSubmission(item);
+        n.read = existing ? existing.read : false;
+        return n;
+      });
+
       // Check for new submissions
-      if (data.length > lastFetchCount && lastFetchCount > 0) {
-        const newSubmissions = data.slice(0, data.length - lastFetchCount);
+      if (normalized.length > lastFetchCount && lastFetchCount > 0) {
+        const newSubmissions = normalized.slice(0, normalized.length - lastFetchCount);
         newSubmissions.forEach(sub => {
           if (sub.status === 'pending') {
             showNotification(`📬 New submission from ${sub.fullName || 'Student'}`);
             playNotificationSound();
+            ringBell();
           }
         });
       }
-      
-      submissions = data;
-      lastFetchCount = data.length;
+
+      submissions = normalized;
+      lastFetchCount = normalized.length;
       saveSubmissions();
       renderSubmissionsList();
       updateNotificationBadge();
+      updateLastRefreshedLabel();
+      if (manual) showNotification('✅ Submissions up to date');
     } else {
       console.error('Failed to fetch submissions');
+      if (manual) showNotification('⚠️ Could not refresh submissions');
     }
   } catch (error) {
     console.error('Error fetching submissions:', error);
+    if (manual) showNotification('⚠️ Could not refresh submissions');
+  } finally {
+    isFetching = false;
+    setRefreshLoading(false);
   }
+}
+
+// Toggle the refresh button's loading state
+function setRefreshLoading(loading) {
+  const btn = document.getElementById('refreshBtn');
+  if (!btn) return;
+  btn.disabled = loading;
+  btn.innerHTML = loading
+    ? '<span class="cod-refresh-icon">🔄</span> Refreshing…'
+    : '<span class="cod-refresh-icon">🔄</span> Refresh';
+}
+
+// Briefly shake the notification bell to draw the eye to new activity
+function ringBell() {
+  const bell = document.getElementById('notificationBell');
+  if (!bell) return;
+  bell.classList.remove('cod-ring');
+  // Force reflow so the animation can restart if it's already mid-way
+  void bell.offsetWidth;
+  bell.classList.add('cod-ring');
+  setTimeout(() => bell.classList.remove('cod-ring'), 650);
+}
+
+// Update the "last updated" timestamp shown next to the refresh button
+function updateLastRefreshedLabel() {
+  const el = document.getElementById('lastUpdated');
+  if (!el) return;
+  const now = new Date();
+  el.textContent = `Updated ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
 // Play notification sound
@@ -128,32 +211,19 @@ function updateNotificationBadge() {
   }
 }
 
-// Add new submission
+// Add new submission (used for manually injected submissions, e.g. via websockets/webhooks)
 function addSubmission(data) {
-  const newSubmission = {
-    id: data.id || Date.now() + Math.random() * 1000,
-    fullName: data.fullName || data.recipient || data['Full Name'] || 'Unknown',
-    email: data.email || data['Email'] || '',
-    phone: data.phone || data['Phone'] || '',
-    course: data.course || data['Course'] || '',
-    grade: data.grade || data['Grade'] || '',
-    studentId: data.studentId || data['Student ID'] || '',
-    message: data.message || data['Message'] || '',
-    photo: data.photo || data['Photo'] || '',
-    status: 'pending',
-    read: false,
-    submittedAt: data.submittedAt || new Date().toISOString()
-  };
-  
-  const exists = submissions.some(s => s.id === newSubmission.id || 
-    (s.fullName === newSubmission.fullName && s.email === newSubmission.email));
-  
+  const normalized = normalizeSubmission(data);
+
+  const exists = submissions.some(s => s.id === normalized.id ||
+    (s.fullName === normalized.fullName && s.email === normalized.email));
+
   if (!exists) {
-    submissions.unshift(newSubmission);
+    submissions.unshift(normalized);
     lastFetchCount = submissions.length;
     saveSubmissions();
     updateNotificationBadge();
-    showNotification(`📬 New submission from ${newSubmission.fullName}`);
+    showNotification(`📬 New submission from ${normalized.fullName}`);
     playNotificationSound();
     renderSubmissionsList();
   }
@@ -163,7 +233,7 @@ function addSubmission(data) {
 function showNotification(message) {
   const container = document.getElementById('notificationContainer');
   if (!container) return;
-  
+
   const toast = document.createElement('div');
   toast.className = 'notification-toast';
   toast.innerHTML = `
@@ -174,7 +244,7 @@ function showNotification(message) {
     </div>
   `;
   container.appendChild(toast);
-  
+
   setTimeout(() => {
     if (toast.parentElement) {
       toast.style.opacity = '0';
@@ -184,21 +254,33 @@ function showNotification(message) {
   }, 5000);
 }
 
-// Update status in backend
+// Update status in backend.
+// Some backends only implement one of PUT/PATCH/POST for updates, so try them
+// in order and only give up once all have failed — this also captures *why*
+// it failed (network error vs. wrong HTTP method vs. server error) so the UI
+// can tell the user something useful instead of silently reverting.
 async function updateStatus(id, status) {
-  try {
-    const response = await fetch(`${API_URL}/${id}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ status })
-    });
-    return response.ok;
-  } catch (error) {
-    console.error('Error updating status:', error);
-    return false;
+  const methods = ['PUT', 'PATCH', 'POST'];
+  let lastError = 'Unknown error';
+
+  for (const method of methods) {
+    try {
+      const response = await fetch(`${API_URL}/${id}`, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, id })
+      });
+      if (response.ok) return { ok: true };
+      // 404/405 means this method/route isn't supported here — try the next one.
+      lastError = `Server responded ${response.status} (${method})`;
+      if (response.status !== 404 && response.status !== 405) break;
+    } catch (error) {
+      lastError = `Network error on ${method}: ${error.message}`;
+    }
   }
+
+  console.error('Error updating status:', lastError);
+  return { ok: false, error: lastError };
 }
 
 // Delete from backend
@@ -207,10 +289,23 @@ async function deleteSubmission(id) {
     const response = await fetch(`${API_URL}/${id}`, {
       method: 'DELETE'
     });
-    return response.ok;
+    if (response.ok) return { ok: true };
+    return { ok: false, error: `Server responded ${response.status}` };
   } catch (error) {
     console.error('Error deleting submission:', error);
-    return false;
+    return { ok: false, error: `Network error: ${error.message}` };
+  }
+}
+
+// Update a stat number, popping it with a small scale animation if it changed
+function setStatValue(el, newValue) {
+  if (!el) return;
+  const current = el.textContent;
+  el.textContent = newValue;
+  if (String(current) !== String(newValue)) {
+    el.classList.remove('cod-pop');
+    void el.offsetWidth;
+    el.classList.add('cod-pop');
   }
 }
 
@@ -218,20 +313,20 @@ async function deleteSubmission(id) {
 function renderSubmissionsList() {
   const list = document.getElementById('submissionsList');
   if (!list) return;
-  
+
   const pending = submissions.filter(s => s.status === 'pending');
   const approved = submissions.filter(s => s.status === 'approved');
   const rejected = submissions.filter(s => s.status === 'rejected');
-  
+
   // Update stats
   const totalEl = document.getElementById('totalCount');
   const pendingEl = document.getElementById('pendingCount');
   const approvedEl = document.getElementById('approvedCount');
-  
-  if (totalEl) totalEl.textContent = submissions.length;
-  if (pendingEl) pendingEl.textContent = pending.length;
-  if (approvedEl) approvedEl.textContent = approved.length;
-  
+
+  setStatValue(totalEl, submissions.length);
+  setStatValue(pendingEl, pending.length);
+  setStatValue(approvedEl, approved.length);
+
   if (submissions.length === 0) {
     list.innerHTML = `
       <div class="empty-state">
@@ -242,20 +337,25 @@ function renderSubmissionsList() {
     `;
     return;
   }
-  
+
   list.innerHTML = submissions.map((sub, index) => `
-    <div class="submission-card ${sub.status === 'pending' ? 'pending' : ''} ${sub.status === 'approved' ? 'approved' : ''} ${sub.status === 'rejected' ? 'rejected' : ''}" data-id="${sub.id}">
+    <div class="submission-card cod-card-enter ${sub.status === 'pending' ? 'pending' : ''} ${sub.status === 'approved' ? 'approved' : ''} ${sub.status === 'rejected' ? 'rejected' : ''}" data-id="${sub.id}" style="animation-delay:${Math.min(index, 8) * 60}ms">
       <div class="submission-header">
         <div class="submission-info">
-          <span class="submission-number">#${index + 1}</span>
+          <span class="submission-number" style="display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:20px; padding:0 6px; border-radius:999px; background:#eef1fb; color:#33396b; font-weight:700; font-size:11px;">#${index + 1}</span>
           <span class="submission-name">${sub.fullName}</span>
           <span class="submission-status ${sub.status}">
             ${sub.status === 'pending' ? '⏳ Pending' : sub.status === 'approved' ? '✅ Approved' : '❌ Rejected'}
           </span>
         </div>
-        <span class="submission-date">${new Date(sub.submittedAt || sub.createdAt).toLocaleString()}</span>
+        <span class="submission-date">${new Date(sub.submittedAt).toLocaleString()}</span>
       </div>
       <div class="submission-details">
+        <div class="detail-row" style="align-items:center;">
+          <span style="display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:999px; background:#fff4e0; color:#8a5a06; font-weight:700; font-size:12px; letter-spacing:.2px;">
+            🆔 ${sub.studentId ? sub.studentId : 'Student ID not provided'}
+          </span>
+        </div>
         <div class="detail-row">
           <span><strong>📧 Email:</strong> ${sub.email || '—'}</span>
           <span><strong>📱 Phone:</strong> ${sub.phone || '—'}</span>
@@ -263,21 +363,14 @@ function renderSubmissionsList() {
         <div class="detail-row">
           <span><strong>📚 Course:</strong> ${sub.course || '—'}</span>
           <span><strong>🎯 Grade:</strong> ${sub.grade || '—'}</span>
-          <span><strong>🆔 Student ID:</strong> ${sub.studentId || '—'}</span>
         </div>
         ${sub.message ? `<div class="detail-row message-row"><strong>💬 Message:</strong> ${sub.message}</div>` : ''}
-        ${sub.photo ? `<div class="detail-row"><img src="${sub.photo}" alt="Student photo" style="max-width: 80px; max-height: 80px; border-radius: 8px; margin-top: 4px;" /></div>` : ''}
+        ${sub.photo ? `<div class="detail-row"><img src="${resolvePhotoUrl(sub.photo)}" alt="Student photo" style="max-width: 80px; max-height: 80px; border-radius: 8px; margin-top: 4px; object-fit: cover;" onerror="this.style.display='none'" /></div>` : ''}
       </div>
       <div class="submission-actions">
         ${sub.status === 'pending' ? `
           <button class="action-btn approve-btn" onclick="window.handleAction('${sub.id}', 'approve')" title="Approve">
             ✅ Approve
-          </button>
-          <button class="action-btn reject-btn" onclick="window.handleAction('${sub.id}', 'reject')" title="Reject">
-            ❌ Reject
-          </button>
-          <button class="action-btn mark-read-btn ${sub.read ? 'read' : ''}" onclick="window.handleAction('${sub.id}', 'markRead')" title="Mark as Read">
-            ${sub.read ? '📖 Read' : '📖 Mark as Read'}
           </button>
         ` : `
           <span class="action-status ${sub.status === 'approved' ? 'approved-text' : 'rejected-text'}">
@@ -296,14 +389,19 @@ function renderSubmissionsList() {
 }
 
 // --- Handle Actions ---
-window.handleAction = async function(id, action) {
-  const sub = submissions.find(s => s.id === id);
+window.handleAction = async function(rawId, action) {
+  // Backend ids are numeric but arrive here as strings via the onclick attribute,
+  // so compare loosely by string form rather than strict equality.
+  const sub = submissions.find(s => String(s.id) === String(rawId));
   if (!sub) return;
-  
+  const id = sub.id;
+  const cardEl = document.querySelector(`.submission-card[data-id="${id}"]`);
+
   switch(action) {
-    case 'approve':
-      const approved = await updateStatus(id, 'approved');
-      if (approved) {
+    case 'approve': {
+      if (cardEl) cardEl.classList.add('cod-approving');
+      const result = await updateStatus(id, 'approved');
+      if (result.ok) {
         sub.status = 'approved';
         sub.read = true;
         saveSubmissions();
@@ -311,31 +409,32 @@ window.handleAction = async function(id, action) {
         updateNotificationBadge();
         showNotification(`✅ Approved: ${sub.fullName}`);
         playNotificationSound();
+        // Re-flash the freshly re-rendered card
+        requestAnimationFrame(() => {
+          const freshCard = document.querySelector(`.submission-card[data-id="${id}"]`);
+          if (freshCard) {
+            freshCard.classList.add('cod-flash-approve');
+            setTimeout(() => freshCard.classList.remove('cod-flash-approve'), 900);
+          }
+        });
+      } else {
+        if (cardEl) {
+          cardEl.classList.remove('cod-approving');
+          cardEl.classList.add('cod-shake-error');
+          setTimeout(() => cardEl.classList.remove('cod-shake-error'), 500);
+        }
+        showNotification(`⚠️ Approve failed — ${result.error}`);
+        console.error(`Approve failed for submission ${id}:`, result.error);
       }
       break;
-    case 'reject':
-      const rejected = await updateStatus(id, 'rejected');
-      if (rejected) {
-        sub.status = 'rejected';
-        sub.read = true;
-        saveSubmissions();
-        renderSubmissionsList();
-        updateNotificationBadge();
-        showNotification(`❌ Rejected: ${sub.fullName}`);
-        playNotificationSound();
-      }
-      break;
-    case 'markRead':
-      sub.read = !sub.read;
-      saveSubmissions();
-      renderSubmissionsList();
-      updateNotificationBadge();
-      showNotification(sub.read ? `📖 Marked as read: ${sub.fullName}` : `📖 Marked as unread: ${sub.fullName}`);
-      break;
-    case 'delete':
+    }
+    case 'delete': {
       if (confirm(`Delete submission from ${sub.fullName}?`)) {
-        const deleted = await deleteSubmission(id);
-        if (deleted) {
+        if (cardEl) cardEl.classList.add('cod-removing');
+        // Let the removal animation play before it actually leaves the list
+        await new Promise(resolve => setTimeout(resolve, cardEl ? 240 : 0));
+        const result = await deleteSubmission(id);
+        if (result.ok) {
           submissions = submissions.filter(s => s.id !== id);
           lastFetchCount = submissions.length;
           saveSubmissions();
@@ -343,31 +442,41 @@ window.handleAction = async function(id, action) {
           updateNotificationBadge();
           showNotification(`🗑️ Deleted: ${sub.fullName}`);
           playNotificationSound();
+        } else {
+          if (cardEl) {
+            cardEl.classList.remove('cod-removing');
+            cardEl.classList.add('cod-shake-error');
+            setTimeout(() => cardEl.classList.remove('cod-shake-error'), 500);
+          }
+          showNotification(`⚠️ Delete failed — ${result.error}`);
+          console.error(`Delete failed for submission ${id}:`, result.error);
         }
       }
       break;
+    }
     case 'certificate':
       // Populate the certificate form with student data
       state.recipient = sub.fullName;
       state.course = sub.course;
       state.grade = sub.grade;
       state.studentId = sub.studentId || '';
-      
+      state.photo = sub.photo ? resolvePhotoUrl(sub.photo) : state.photo;
+
       const recipientInput = document.querySelector('#in-recipient');
       const courseInput = document.querySelector('#in-course');
       const gradeInput = document.querySelector('#in-grade');
       const studentIdInput = document.querySelector('#in-studentId');
-      
+
       if (recipientInput) recipientInput.value = sub.fullName;
       if (courseInput) courseInput.value = sub.course;
       if (gradeInput) gradeInput.value = sub.grade;
       if (studentIdInput) studentIdInput.value = sub.studentId || '';
-      
+
       state.type = 'merit';
       renderDocuments();
       renderForm();
       renderPreview();
-      
+
       showNotification(`🎓 Certificate ready for ${sub.fullName}`);
       document.querySelector('.stage').scrollIntoView({ behavior: 'smooth' });
       break;
@@ -384,8 +493,7 @@ window.toggleNotifications = function() {
 
 // Refresh submissions
 window.refreshSubmissions = function() {
-  showNotification('🔄 Refreshing submissions...');
-  fetchSubmissions();
+  fetchSubmissions(true);
 };
 
 // Copy form link
@@ -408,10 +516,10 @@ window.copyFormLink = function(url) {
 
 // Show form link
 function showFormLink() {
-  const formUrl = 'https://codstudentform.netlify.app';
-  
+  const formUrl = 'https://codstudent.netlify.app/';
+
   if (document.querySelector('.form-link-container')) return;
-  
+
   const container = document.createElement('div');
   container.className = 'form-link-container';
   container.innerHTML = `
@@ -420,13 +528,13 @@ function showFormLink() {
         📤 Student Submission Form
       </p>
       <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <input type="text" value="${formUrl}" readonly 
+        <input type="text" value="${formUrl}" readonly
                style="flex: 1; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 13px; background: #fff; min-width: 150px;" />
-        <button onclick="window.copyFormLink('${formUrl}')" 
+        <button onclick="window.copyFormLink('${formUrl}')"
                 style="padding: 8px 16px; border: none; border-radius: 8px; background: #0798d1; color: #fff; cursor: pointer; font-weight: 600; white-space: nowrap;">
           Copy Link
         </button>
-        <button onclick="window.open('${formUrl}', '_blank')" 
+        <button onclick="window.open('${formUrl}', '_blank')"
                 style="padding: 8px 16px; border: none; border-radius: 8px; background: #10b981; color: #fff; cursor: pointer; font-weight: 600; white-space: nowrap;">
           Open Form
         </button>
@@ -436,13 +544,139 @@ function showFormLink() {
       </p>
     </div>
   `;
-  
+
   const panel = document.querySelector('.panel');
   const notificationBell = document.querySelector('.notification-bell-wrapper');
   if (panel && notificationBell) {
     panel.insertBefore(container, notificationBell.nextSibling);
   }
 }
+
+// --- Animation styles ---
+// Injected at runtime so these work regardless of what's already in style.css.
+// Uses "cod-" prefixed classes/keyframes to avoid colliding with existing rules.
+function injectAnimationStyles() {
+  if (document.getElementById('cod-animations')) return;
+  const style = document.createElement('style');
+  style.id = 'cod-animations';
+  style.textContent = `
+    @keyframes cod-toast-in {
+      from { opacity: 0; transform: translateX(48px) scale(.94); }
+      to { opacity: 1; transform: translateX(0) scale(1); }
+    }
+    .notification-toast { animation: cod-toast-in .38s cubic-bezier(.34,1.56,.64,1) both; }
+
+    @keyframes cod-bell-ring {
+      0%, 100% { transform: rotate(0deg); }
+      15% { transform: rotate(16deg); }
+      30% { transform: rotate(-14deg); }
+      45% { transform: rotate(10deg); }
+      60% { transform: rotate(-8deg); }
+      75% { transform: rotate(4deg); }
+      90% { transform: rotate(-2deg); }
+    }
+    .notification-bell.cod-ring { animation: cod-bell-ring .6s ease; transform-origin: top center; }
+    .notification-bell { transition: transform .15s ease; }
+    .notification-bell:hover { transform: scale(1.08); }
+
+    @keyframes cod-badge-pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.55); }
+      50% { box-shadow: 0 0 0 7px rgba(239,68,68,0); }
+    }
+    .notification-badge.pulse { animation: cod-badge-pulse 1.5s ease-in-out infinite; }
+
+    @keyframes cod-card-enter {
+      from { opacity: 0; transform: translateY(16px) scale(.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .submission-card.cod-card-enter {
+      animation: cod-card-enter .45s cubic-bezier(.22,1,.36,1) both;
+    }
+    .submission-card {
+      transition: transform .25s ease, box-shadow .25s ease, opacity .25s ease, background-color .6s ease;
+    }
+    .submission-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 24px rgba(20, 25, 60, .10);
+    }
+    .submission-card.cod-removing {
+      opacity: 0;
+      transform: translateX(36px) scale(.95);
+      pointer-events: none;
+    }
+    .submission-card.cod-approving {
+      opacity: .6;
+      transform: scale(.99);
+    }
+    @keyframes cod-flash-approve {
+      0% { background-color: #e7fbee; }
+      100% { background-color: transparent; }
+    }
+    .submission-card.cod-flash-approve { animation: cod-flash-approve .9s ease; }
+
+    .action-btn {
+      transition: transform .15s cubic-bezier(.34,1.56,.64,1), box-shadow .15s ease, filter .15s ease;
+    }
+    .action-btn:hover { transform: translateY(-2px) scale(1.04); filter: brightness(1.06); }
+    .action-btn:active { transform: translateY(0) scale(.93); }
+
+    .document-option, .action-status {
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .document-option:hover { transform: translateX(2px); }
+    .document-option.active { animation: cod-card-enter .3s ease both; }
+
+    .refresh-btn {
+      transition: transform .15s ease, filter .15s ease;
+    }
+    .refresh-btn:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
+    .refresh-btn:active:not(:disabled) { transform: scale(.95); }
+    @keyframes cod-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .refresh-btn:disabled .cod-refresh-icon {
+      display: inline-block;
+      animation: cod-spin .8s linear infinite;
+    }
+
+    .preview, .document-svg { transition: opacity .25s ease, transform .25s ease; }
+
+    @keyframes cod-fade-in { from { opacity: 0; } to { opacity: 1; } }
+    #submissionsList { animation: cod-fade-in .3s ease both; }
+
+    @keyframes cod-shake-error {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px); }
+      40% { transform: translateX(5px); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(3px); }
+    }
+    .submission-card.cod-shake-error {
+      animation: cod-shake-error .45s ease;
+      box-shadow: 0 0 0 2px rgba(239,68,68,.35) !important;
+    }
+
+    @keyframes cod-stat-pop {
+      0% { transform: scale(1); }
+      45% { transform: scale(1.22); }
+      100% { transform: scale(1); }
+    }
+    .stat-number { display: inline-block; transition: color .2s ease; }
+    .stat-number.cod-pop { animation: cod-stat-pop .35s cubic-bezier(.34,1.56,.64,1); }
+
+    .submissions-panel {
+      transition: max-height .4s cubic-bezier(.22,1,.36,1), opacity .3s ease;
+    }
+
+    @keyframes cod-badge-in {
+      from { opacity: 0; transform: scale(.85); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .submission-details > .detail-row:first-child span { animation: cod-badge-in .3s ease both; }
+
+    .app-shell { transition: opacity .5s ease; }
+  `;
+  document.head.appendChild(style);
+}
+injectAnimationStyles();
 
 // --- App HTML ---
 app.innerHTML = `
@@ -457,7 +691,7 @@ app.innerHTML = `
     <div class="loader-bar"><span></span></div>
     <p>Preparing your document studio</p>
   </div>
-  
+
   <div class="app-shell" id="app-shell">
     <aside class="panel">
       <div class="brand">
@@ -466,10 +700,10 @@ app.innerHTML = `
         </div>
         <div>
           <strong>Document Studio</strong>
-          <small>Clan of David Academy</small>
+          <small>Clan of David art And Music Academy</small>
         </div>
       </div>
-      
+
       <div class="notification-bell-wrapper">
         <button class="notification-bell" id="notificationBell" onclick="window.toggleNotifications()">
           🔔
@@ -477,13 +711,13 @@ app.innerHTML = `
         </button>
         <span class="notification-label">Submissions</span>
       </div>
-      
+
       <div class="panel-heading">
         <p class="eyebrow">Create a document</p>
         <h1>Choose a template</h1>
         <p class="hint">Enter the details, add your images, then download a finished document.</p>
       </div>
-      
+
       <div class="stats-row">
         <div class="stat-item">
           <span class="stat-number" id="totalCount">0</span>
@@ -498,20 +732,23 @@ app.innerHTML = `
           <span class="stat-label">Approved</span>
         </div>
       </div>
-      
+
       <div class="document-list" id="document-list"></div>
       <form class="form" id="form" autocomplete="off"></form>
     </aside>
-    
+
     <main class="stage">
       <div class="submissions-panel" id="submissionsPanel">
         <div class="panel-header" onclick="window.toggleNotifications()">
           <h3>📋 Student Submissions</h3>
-          <button class="refresh-btn" onclick="event.stopPropagation(); window.refreshSubmissions();">🔄 Refresh</button>
+          <div class="panel-header-actions" onclick="event.stopPropagation();">
+            <span class="last-updated" id="lastUpdated"></span>
+            <button class="refresh-btn" id="refreshBtn" onclick="window.refreshSubmissions();">🔄 Refresh</button>
+          </div>
         </div>
         <div id="submissionsList"></div>
       </div>
-      
+
       <div class="stage-top">
         <div>
           <p class="eyebrow">Live preview</p>
@@ -522,7 +759,7 @@ app.innerHTML = `
       <div class="preview" id="preview"></div>
     </main>
   </div>
-  
+
   <div id="notificationContainer"></div>
 `;
 
@@ -540,14 +777,14 @@ function typewriterAnimation() {
   const fullText = 'CLAN OF DAVID ACADEMY';
   let index = 0;
   let isDeleting = false;
-  
+
   function type() {
     if (!textElement) return;
-    
+
     if (!isDeleting) {
       textElement.textContent = fullText.substring(0, index + 1);
       index++;
-      
+
       if (index === fullText.length) {
         setTimeout(() => {
           isDeleting = true;
@@ -555,23 +792,23 @@ function typewriterAnimation() {
         }, 2000);
         return;
       }
-      
+
       const delay = 30 + Math.random() * 30;
       setTimeout(type, delay);
     } else {
       textElement.textContent = fullText.substring(0, index - 1);
       index--;
-      
+
       if (index === 0) {
         isDeleting = false;
         setTimeout(type, 1000);
         return;
       }
-      
+
       setTimeout(type, 15 + Math.random() * 20);
     }
   }
-  
+
   setTimeout(type, 500);
 }
 
@@ -591,16 +828,47 @@ function logoSvg(x, y, width = 100, height = 82) {
   return `<g transform="translate(${x} ${y})"><rect x="-35" y="-32" width="70" height="64" rx="3" fill="#fff" stroke="#2923b9" stroke-width="4"/><text y="-4" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="#2521ad">COD</text><text y="14" text-anchor="middle" font-family="Arial" font-size="7" font-weight="700" fill="#e91b78">ART &amp; MUSIC</text></g>`;
 }
 
+// Per-certificate-type copy: title shown at the top, seal text, the completion
+// line, and the closing "qualifies / recognition" line.
+const certificateCopy = {
+  merit: {
+    title: 'Certificate of Merit',
+    seal: 'MERIT',
+    completionLine: 'For the successful completion of',
+    closingLine: 'And has qualified for the next grade',
+  },
+  excellence: {
+    title: 'Certificate of Excellence',
+    seal: 'EXCELLENCE',
+    completionLine: 'For the successful completion of',
+    closingLine: 'And has qualified for the next grade',
+  },
+  attendance: {
+    title: 'Certificate of Attendance',
+    seal: 'ATTENDANCE',
+    completionLine: 'For dedicated attendance and participation in',
+    closingLine: 'In recognition of their consistent commitment',
+  },
+}
+
+function signatureBlock(x, dy, signatureKey, name, fallback) {
+  const signature = state[signatureKey];
+  const signatureImage = signature
+    ? `<image href="${signature}" x="${x - 75}" y="${dy - 52}" width="150" height="44" preserveAspectRatio="xMidYMid meet"/>`
+    : '';
+  return `${signatureImage}<line x1="${x - 75}" y1="${dy}" x2="${x + 75}" y2="${dy}" stroke="#b9760b" stroke-width="2"/><text x="${x}" y="${dy + 22}" text-anchor="middle">${value(name, fallback)}</text>`;
+}
+
 function certificateSvg(kind) {
-  const title = kind === 'excellence' ? 'Certificate of Excellence' : 'Certificate of Merit';
-  const seal = kind === 'excellence' ? 'EXCELLENCE' : 'MERIT';
+  const copy = certificateCopy[kind] || certificateCopy.merit;
+  const { title, seal, completionLine, closingLine } = copy;
   return `<svg class="document-svg" id="certificate" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 790" role="img" aria-label="${title}">
     <defs><linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17175c"/><stop offset=".5" stop-color="#252a91"/><stop offset="1" stop-color="#071271"/></linearGradient><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9c6c0f"/><stop offset=".5" stop-color="#fff19a"/><stop offset="1" stop-color="#b7801d"/></linearGradient><radialGradient id="red"><stop stop-color="#d53a32"/><stop offset="1" stop-color="#9c1515"/></radialGradient></defs>
     <rect width="1120" height="790" fill="#fff"/><path d="M0 0H336L198 395l138 395H0Z" fill="url(#ribbon)"/><path d="M130 0H336L198 395l138 395H130Z" fill="#2336af" opacity=".3"/><path d="M0 0h60l138 395L60 790H0Z" fill="#fff" opacity=".05"/><path d="M336 0 198 395l138 395" fill="none" stroke="url(#gold)" stroke-width="4"/>
     <g transform="translate(238 346)"><circle r="62" fill="url(#gold)" stroke="#865a10" stroke-width="2"/><circle r="44" fill="none" stroke="#865a10" stroke-width="3"/><circle r="34" fill="#f7da62" stroke="#ffe78c"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="9" font-weight="700" fill="#754b05">${seal}</text></g>
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".55" transform="translate(120 170)">${Array.from({ length: 11 }, (_, i) => `<path d="M-30 ${i * 6}C100 ${-84 + i * 6} 250 ${-82 + i * 6} 310 ${28 + i * 6}S212 ${240 + i * 6} 28 ${154 + i * 6}"/>`).join('')}</g>
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".5" transform="translate(740 470)">${Array.from({ length: 9 }, (_, i) => `<path d="M${20 - i * 6} ${i * 6}C100 ${-142 + i * 6} 280 ${-170 + i * 6} 378 ${-62 + i * 6}S384 ${74 + i * 6} 286 ${100 + i * 6}"/>`).join('')}</g>
-    <g transform="translate(560 0)" text-anchor="middle">${logoSvg(0, 92, 108, 86)}<text y="226" font-family="Georgia,serif" font-size="45" font-weight="700" fill="#282a8f">${title}</text><text y="280" font-family="Arial" font-size="20" fill="#ee2424">This certificate is proudly presented to</text><text id="svg-recipient" y="350" font-family="Georgia,serif" font-size="39" font-weight="700" fill="#1e1e1e">${value('recipient', 'Recipient Name')}</text><line x1="-210" y1="370" x2="210" y2="370" stroke="#1e1e1e"/><text y="414" font-family="Arial" font-size="17" font-weight="700">For the successful completion of</text><text y="466" font-family="Arial" font-size="17">Grade <tspan id="svg-grade">${value('grade', '___')}</tspan> of <tspan id="svg-course">${value('course', '_______')}</tspan> Course</text><text y="506" font-family="Arial" font-size="17">on this day <tspan id="svg-day">${value('day', '__')}</tspan> of year <tspan id="svg-year">${value('year', '____')}</tspan></text><text y="556" font-family="Arial" font-size="20" font-weight="700" fill="#2a3192">And has qualified for the next grade</text><g transform="translate(0 690)" font-family="Georgia,serif" font-size="13"><line x1="-300" y1="0" x2="-150" y2="0" stroke="#b9760b" stroke-width="2"/><text id="svg-coordinator" x="-225" y="22">${value('coordinator', 'Training Coordinator')}</text><line x1="150" y1="0" x2="300" y2="0" stroke="#b9760b" stroke-width="2"/><text id="svg-director" x="225" y="22">${value('director', 'Director')}</text></g></g><g transform="translate(560 718)"><circle r="52" fill="url(#red)"/><circle r="40" fill="none" stroke="#781010"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="10" font-weight="700" fill="#fff">${seal}</text></g>
+    <g transform="translate(560 0)" text-anchor="middle">${logoSvg(0, 92, 108, 86)}<text y="226" font-family="Georgia,serif" font-size="45" font-weight="700" fill="#282a8f">${title}</text><text y="280" font-family="Arial" font-size="20" fill="#ee2424">This certificate is proudly presented to</text><text id="svg-recipient" y="350" font-family="Georgia,serif" font-size="39" font-weight="700" fill="#1e1e1e">${value('recipient', 'Recipient Name')}</text><line x1="-210" y1="370" x2="210" y2="370" stroke="#1e1e1e"/><text y="414" font-family="Arial" font-size="17" font-weight="700">${completionLine}</text><text y="466" font-family="Arial" font-size="17">Grade <tspan id="svg-grade">${value('grade', '___')}</tspan> of <tspan id="svg-course">${value('course', '_______')}</tspan> Course</text><text y="506" font-family="Arial" font-size="17">on this day <tspan id="svg-day">${value('day', '__')}</tspan> of year <tspan id="svg-year">${value('year', '____')}</tspan></text><text y="556" font-family="Arial" font-size="20" font-weight="700" fill="#2a3192">${closingLine}</text><g transform="translate(0 690)" font-family="Georgia,serif" font-size="13">${signatureBlock(-225, 0, 'coordinatorSignature', 'coordinator', 'Training Coordinator')}${signatureBlock(225, 0, 'directorSignature', 'director', 'Director')}</g></g><g transform="translate(560 718)"><circle r="52" fill="url(#red)"/><circle r="40" fill="none" stroke="#781010"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="10" font-weight="700" fill="#fff">${seal}</text></g>
   </svg>`;
 }
 
@@ -615,7 +883,7 @@ function idCardSvg() {
       <text x="280" y="312" text-anchor="middle" font-family="Arial" font-size="10" fill="#9ca3af">(passport size)</text>
     `;
   }
-  
+
   return `<svg class="document-svg id-svg" id="idcard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 760" role="img" aria-label="Student ID card">
     <defs>
       <linearGradient id="blue" x1="0" y1="0" x2="1" y2="0">
@@ -630,9 +898,9 @@ function idCardSvg() {
         <circle cx="280" cy="296" r="100"/>
       </clipPath>
     </defs>
-    
+
     <rect width="1120" height="760" fill="#e9edf5"/>
-    
+
     <g transform="translate(30 48)">
       <rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/>
       <path d="M0 0h510v190c-135 25-287-15-510 18Z" fill="url(#blue)"/>
@@ -658,7 +926,7 @@ function idCardSvg() {
         <line x1="178" y1="632" x2="440" y2="632" stroke="#1e1e1e" stroke-dasharray="2,2"/>
       </g>
     </g>
-    
+
     <g transform="translate(580 48)">
       <rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/>
       <path d="M0 0h510v105c-140 24-270-30-510 5Z" fill="url(#blue)"/>
@@ -691,7 +959,7 @@ function renderDocuments() {
 function renderForm() {
   const isId = state.type === 'idcard';
   const fields = isId ? idFields : certificateFields;
-  
+
   let uploadHtml = '';
   if (isId) {
     uploadHtml = `<div class="upload-grid">
@@ -701,23 +969,42 @@ function renderForm() {
         <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Upload a clear passport-style photo</small>
       </label>
     </div>`;
+  } else {
+    uploadHtml = `<div class="upload-grid">
+      <label class="upload-field">
+        <span>Coordinator Signature</span>
+        <input id="coordinator-signature-input" type="file" accept="image/*"/>
+        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Upload a scanned or transparent-background signature</small>
+      </label>
+      <label class="upload-field">
+        <span>Director Signature</span>
+        <input id="director-signature-input" type="file" accept="image/*"/>
+        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Upload a scanned or transparent-background signature</small>
+      </label>
+    </div>`;
   }
-  
+
   form.innerHTML = `${uploadHtml}${fields.map(([id, label, placeholder]) => `<label class="field"><span>${label}</span><input id="in-${id}" type="text" placeholder="${placeholder}" value="${state[id]}"/></label>`).join('')}<button type="button" id="download" class="download">Download ${isId ? 'ID card (PDF with front & back)' : 'certificate'}</button>`;
-  
+
   fields.forEach(([id]) => {
     const input = document.querySelector(`#in-${id}`);
     if (input) {
-      input.addEventListener('input', event => { 
+      input.addEventListener('input', event => {
         state[id] = event.target.value;
         renderPreview();
       });
     }
   });
-  
+
   const photoInput = document.querySelector('#photo-input');
   if (photoInput) photoInput.addEventListener('change', event => readImage(event, 'photo'));
-  
+
+  const coordinatorSignatureInput = document.querySelector('#coordinator-signature-input');
+  if (coordinatorSignatureInput) coordinatorSignatureInput.addEventListener('change', event => readImage(event, 'coordinatorSignature'));
+
+  const directorSignatureInput = document.querySelector('#director-signature-input');
+  if (directorSignatureInput) directorSignatureInput.addEventListener('change', event => readImage(event, 'directorSignature'));
+
   const downloadBtn = document.querySelector('#download');
   if (downloadBtn) downloadBtn.addEventListener('click', downloadDocument);
 }
@@ -726,7 +1013,7 @@ function readImage(event, key) {
   const file = event.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.addEventListener('load', () => { 
+  reader.addEventListener('load', () => {
     state[key] = String(reader.result);
     renderPreview();
   });
@@ -735,13 +1022,19 @@ function readImage(event, key) {
 
 function renderPreview() {
   const isId = state.type === 'idcard';
-  previewTitle.textContent = isId ? 'Student ID Card' : state.type === 'excellence' ? 'Certificate of Excellence' : 'Certificate of Merit';
+  previewTitle.textContent = isId ? 'Student ID Card' : (certificateCopy[state.type] || certificateCopy.merit).title;
+  preview.style.opacity = '0';
+  preview.style.transform = 'translateY(6px)';
   preview.innerHTML = isId ? idCardSvg() : certificateSvg(state.type);
+  requestAnimationFrame(() => {
+    preview.style.opacity = '1';
+    preview.style.transform = 'translateY(0)';
+  });
 }
 
 async function downloadDocument() {
   const isId = state.type === 'idcard';
-  
+
   if (isId) {
     await downloadIdCardPDF();
   } else {
@@ -753,20 +1046,20 @@ async function downloadIdCardPDF() {
   if (typeof html2pdf === 'undefined') {
     await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
   }
-  
+
   const svg = preview.querySelector('svg');
   const clone = svg.cloneNode(true);
   const viewBox = svg.viewBox.baseVal;
   clone.setAttribute('width', String(viewBox.width * 2));
   clone.setAttribute('height', String(viewBox.height * 2));
-  
+
   const svgString = new XMLSerializer().serializeToString(clone);
   const url = URL.createObjectURL(new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' }));
   const image = new Image();
   image.src = url;
-  
+
   await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; });
-  
+
   const canvas = document.createElement('canvas');
   canvas.width = viewBox.width * 2;
   canvas.height = viewBox.height * 2;
@@ -775,15 +1068,15 @@ async function downloadIdCardPDF() {
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   URL.revokeObjectURL(url);
-  
+
   const imgData = canvas.toDataURL('image/png');
-  
+
   const pdfElement = document.createElement('div');
   pdfElement.style.width = '595px';
   pdfElement.style.padding = '20px';
   pdfElement.style.backgroundColor = '#ffffff';
   pdfElement.style.fontFamily = 'Arial, sans-serif';
-  
+
   pdfElement.innerHTML = `
     <div style="text-align: center; margin-bottom: 10px;">
       <h3 style="color: #182f88; margin: 0;">CLAN OF DAVID ACADEMY</h3>
@@ -804,7 +1097,7 @@ async function downloadIdCardPDF() {
       <p style="margin: 2px 0;">If found please return to the address above or to the nearest police station.</p>
     </div>
   `;
-  
+
   html2pdf()
     .set({
       margin: 10,
@@ -866,9 +1159,9 @@ showFormLink();
 loadSubmissions();
 
 // Auto-refresh every 10 seconds
-setInterval(fetchSubmissions, 10000);
+setInterval(() => fetchSubmissions(false), 10000);
 
-window.setTimeout(() => { 
+window.setTimeout(() => {
   loader.classList.add('hidden');
   shell.classList.add('ready');
 }, 5000);
