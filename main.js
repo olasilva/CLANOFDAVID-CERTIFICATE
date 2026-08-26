@@ -58,15 +58,33 @@ let lastFetchCount = 0
 let fetchInterval = null
 let isFetching = false
 
-// Resolve a photo path returned by the backend into a usable <img> src.
-// The API returns relative paths like "/uploads/photo-....jpeg" which need
-// the backend origin prefixed, or already-absolute/data URLs which pass through.
+// ============================================
+// PHOTO RESOLUTION - FIXED ✅
+// ============================================
 function resolvePhotoUrl(photo) {
-  if (!photo) return '';
+  // Handle null, undefined, empty string, or "null" string
+  if (!photo || photo === 'null' || photo === 'undefined' || photo === '') {
+    return '';
+  }
+  
+  // If it's already a complete URL (http, https, data), return as-is
   if (photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:')) {
     return photo;
   }
-  return `${BACKEND_ORIGIN}${photo.startsWith('/') ? '' : '/'}${photo}`;
+  
+  // ✅ ALWAYS use the BACKEND origin for photos
+  // The backend stores photos at /uploads/ on the backend server
+  if (photo.startsWith('/uploads/')) {
+    return `${BACKEND_ORIGIN}${photo}`;
+  }
+  
+  // If it's a relative path, prepend the backend origin
+  if (photo.startsWith('/')) {
+    return `${BACKEND_ORIGIN}${photo}`;
+  }
+  
+  // Default: try to use as-is with backend origin
+  return `${BACKEND_ORIGIN}/${photo}`;
 }
 
 // Normalize a raw backend submission (snake_case) into the shape the UI expects.
@@ -97,6 +115,15 @@ async function fetchSubmissions(manual = false) {
     const response = await fetch(API_URL);
     if (response.ok) {
       const raw = await response.json();
+      
+      // Debug: log raw data to see what's coming back
+      console.log('📥 Raw submissions data:', raw);
+      raw.forEach(item => {
+        if (item.photo) {
+          console.log('📷 Photo field:', item.photo, 'Type:', typeof item.photo);
+          console.log('📷 Resolved photo URL:', resolvePhotoUrl(item.photo));
+        }
+      });
 
       // Normalize field names and preserve each item's local "read" flag across refreshes.
       const normalized = raw.map(item => {
@@ -255,10 +282,6 @@ function showNotification(message) {
 }
 
 // Update status in backend.
-// Some backends only implement one of PUT/PATCH/POST for updates, so try them
-// in order and only give up once all have failed — this also captures *why*
-// it failed (network error vs. wrong HTTP method vs. server error) so the UI
-// can tell the user something useful instead of silently reverting.
 async function updateStatus(id, status) {
   const methods = ['PUT', 'PATCH', 'POST'];
   let lastError = 'Unknown error';
@@ -271,7 +294,6 @@ async function updateStatus(id, status) {
         body: JSON.stringify({ status, id })
       });
       if (response.ok) return { ok: true };
-      // 404/405 means this method/route isn't supported here — try the next one.
       lastError = `Server responded ${response.status} (${method})`;
       if (response.status !== 404 && response.status !== 405) break;
     } catch (error) {
@@ -338,7 +360,12 @@ function renderSubmissionsList() {
     return;
   }
 
-  list.innerHTML = submissions.map((sub, index) => `
+  list.innerHTML = submissions.map((sub, index) => {
+    // Resolve photo URL before rendering
+    const photoUrl = resolvePhotoUrl(sub.photo);
+    console.log(`🖼️ Rendering photo for ${sub.fullName}:`, photoUrl);
+    
+    return `
     <div class="submission-card cod-card-enter ${sub.status === 'pending' ? 'pending' : ''} ${sub.status === 'approved' ? 'approved' : ''} ${sub.status === 'rejected' ? 'rejected' : ''}" data-id="${sub.id}" style="animation-delay:${Math.min(index, 8) * 60}ms">
       <div class="submission-header">
         <div class="submission-info">
@@ -365,7 +392,15 @@ function renderSubmissionsList() {
           <span><strong>🎯 Grade:</strong> ${sub.grade || '—'}</span>
         </div>
         ${sub.message ? `<div class="detail-row message-row"><strong>💬 Message:</strong> ${sub.message}</div>` : ''}
-        ${sub.photo ? `<div class="detail-row"><img src="${resolvePhotoUrl(sub.photo)}" alt="Student photo" style="max-width: 80px; max-height: 80px; border-radius: 8px; margin-top: 4px; object-fit: cover;" onerror="this.style.display='none'" /></div>` : ''}
+        ${sub.photo && sub.photo !== '' && sub.photo !== 'null' ? `
+          <div class="detail-row" style="margin-top: 6px;">
+            <img src="${photoUrl}" 
+                 alt="${sub.fullName}'s photo" 
+                 style="max-width: 80px; max-height: 80px; border-radius: 8px; object-fit: cover; border: 1px solid #e5e7eb; padding: 2px; background: #fff;" 
+                 onerror="this.style.display='none'; this.parentElement.innerHTML='<span style=\\'font-size: 12px; color: #9ca3af; padding: 4px 8px; background: #f3f4f6; border-radius: 6px;\\'>📷 No photo</span>';" 
+            />
+          </div>
+        ` : ''}
       </div>
       <div class="submission-actions">
         ${sub.status === 'pending' ? `
@@ -385,7 +420,7 @@ function renderSubmissionsList() {
         </button>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 // --- Handle Actions ---
