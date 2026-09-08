@@ -1,7 +1,9 @@
 import './style.css'
 
 const app = document.querySelector('#app')
-const year = String(new Date().getFullYear())
+// No longer pre-fill with current day/year
+const year = ''
+const today = ''
 
 // ============================================
 // BACKEND API CONFIGURATION
@@ -25,20 +27,24 @@ const state = {
   recipient: '',
   grade: '',
   course: '',
-  day: '',
-  year,
+  day: '',          // empty by default
+  year: '',         // empty by default
   coordinator: '',
   director: '',
   studentId: '',
   phone: '',
 }
 
+// Default signature paths (relative to public folder)
+const DEFAULT_COORD_SIG = '/images/cod_signature.jpg';
+const DEFAULT_DIRECTOR_SIG = '/images/codsign2.jpg';
+
 const certificateFields = [
   ['recipient', 'Recipient name', 'e.g. Ben Glory'],
   ['grade', 'Grade', 'e.g. 5'],
   ['course', 'Course', 'e.g. Piano'],
   ['day', 'Day', 'e.g. 12'],
-  ['year', 'Year', year],
+  ['year', 'Year', 'e.g. 2026'],
   ['coordinator', 'Training coordinator', 'Coordinator name'],
   ['director', 'Director', 'Director name'],
 ]
@@ -57,6 +63,71 @@ let notificationCount = 0
 let lastFetchCount = 0
 let fetchInterval = null
 let isFetching = false
+
+// ============================================
+// BACKGROUND REMOVAL FUNCTION
+// ============================================
+function removeBackground(dataUrl, targetColor = 'white') {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
+      
+      // Remove white/near-white pixels
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        if (r > 240 && g > 240 && b > 240) {
+          data[i + 3] = 0; // Set alpha to 0
+        }
+      }
+      
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.src = dataUrl;
+  });
+}
+
+// ============================================
+// LOAD DEFAULT SIGNATURES (with background removal)
+// ============================================
+async function loadDefaultSignatures() {
+  const processSignature = async (path) => {
+    try {
+      const response = await fetch(path);
+      if (!response.ok) throw new Error('Not found');
+      const blob = await response.blob();
+      const dataUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.readAsDataURL(blob);
+      });
+      const cleaned = await removeBackground(dataUrl);
+      return cleaned;
+    } catch (error) {
+      console.warn(`Could not load default signature at ${path}`);
+      return '';
+    }
+  };
+
+  const [coordSig, dirSig] = await Promise.all([
+    processSignature(DEFAULT_COORD_SIG),
+    processSignature(DEFAULT_DIRECTOR_SIG)
+  ]);
+
+  if (coordSig) state.coordinatorSignature = coordSig;
+  if (dirSig) state.directorSignature = dirSig;
+}
 
 // ============================================
 // PHOTO RESOLUTION
@@ -183,7 +254,7 @@ function updateLastRefreshedLabel() {
 
 function playNotificationSound() {
   try {
-    const audio = new Audio('data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF');
+    const audio = new Audio('data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF');
     audio.volume = 0.3;
     audio.play().catch(() => {});
   } catch (e) {}
@@ -875,7 +946,6 @@ function certificateSvg(kind) {
 // ✅ IMPROVED ID CARD SVG WITH BETTER PHOTO POSITIONING
 // ============================================
 function idCardSvg() {
-  // Handle photo element with improved sizing
   let photoElement = '';
   if (state.photo && state.photo !== '') {
     photoElement = `
@@ -1024,12 +1094,12 @@ function renderForm() {
       <label class="upload-field">
         <span>Coordinator Signature</span>
         <input id="coordinator-signature-input" type="file" accept="image/*"/>
-        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Upload a scanned or transparent-background signature</small>
+        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Background will be removed automatically</small>
       </label>
       <label class="upload-field">
         <span>Director Signature</span>
         <input id="director-signature-input" type="file" accept="image/*"/>
-        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Upload a scanned or transparent-background signature</small>
+        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Background will be removed automatically</small>
       </label>
     </div>`;
   }
@@ -1046,14 +1116,40 @@ function renderForm() {
     }
   });
 
+  // Photo input handler
   const photoInput = document.querySelector('#photo-input');
   if (photoInput) photoInput.addEventListener('change', event => readImage(event, 'photo'));
 
+  // Signature input handlers with background removal
   const coordinatorSignatureInput = document.querySelector('#coordinator-signature-input');
-  if (coordinatorSignatureInput) coordinatorSignatureInput.addEventListener('change', event => readImage(event, 'coordinatorSignature'));
+  if (coordinatorSignatureInput) {
+    coordinatorSignatureInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.addEventListener('load', async () => {
+        const cleanedSignature = await removeBackground(String(reader.result));
+        state.coordinatorSignature = cleanedSignature;
+        renderPreview();
+      });
+      reader.readAsDataURL(file);
+    });
+  }
 
   const directorSignatureInput = document.querySelector('#director-signature-input');
-  if (directorSignatureInput) directorSignatureInput.addEventListener('change', event => readImage(event, 'directorSignature'));
+  if (directorSignatureInput) {
+    directorSignatureInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.addEventListener('load', async () => {
+        const cleanedSignature = await removeBackground(String(reader.result));
+        state.directorSignature = cleanedSignature;
+        renderPreview();
+      });
+      reader.readAsDataURL(file);
+    });
+  }
 
   const downloadBtn = document.querySelector('#download');
   if (downloadBtn) downloadBtn.addEventListener('click', downloadDocument);
@@ -1199,13 +1295,19 @@ function loadScript(src) {
 }
 
 // --- Initialize everything ---
-renderDocuments();
-renderForm();
-renderPreview();
-typewriterAnimation();
-showFormLink();
+async function init() {
+  // Load default signatures before rendering
+  await loadDefaultSignatures();
 
-loadSubmissions();
+  renderDocuments();
+  renderForm();
+  renderPreview();
+  typewriterAnimation();
+  showFormLink();
+  loadSubmissions();
+}
+
+init();
 
 // Auto-refresh every 10 seconds
 setInterval(() => fetchSubmissions(false), 10000);
