@@ -11,7 +11,7 @@ const API_URL = `${BACKEND_ORIGIN}/api/submissions`;
 
 const documentTypes = [
   { id: 'merit', label: 'Certificate of Merit', short: 'Merit certificate' },
-  { id: 'excellence', label: 'Certificate of Excellence', short: 'Excellence certificate' },
+  { id: 'completion', label: 'Certificate of Completion', short: 'Completion certificate' },
   { id: 'attendance', label: 'Certificate of Attendance', short: 'Attendance certificate' },
   { id: 'idcard', label: 'Student ID Card', short: 'Student ID card' },
 ]
@@ -59,35 +59,29 @@ let fetchInterval = null
 let isFetching = false
 
 // ============================================
-// PHOTO RESOLUTION - FIXED ✅
+// PHOTO RESOLUTION
 // ============================================
 function resolvePhotoUrl(photo) {
-  // Handle null, undefined, empty string, or "null" string
   if (!photo || photo === 'null' || photo === 'undefined' || photo === '') {
     return '';
   }
   
-  // If it's already a complete URL (http, https, data), return as-is
   if (photo.startsWith('http://') || photo.startsWith('https://') || photo.startsWith('data:')) {
     return photo;
   }
   
-  // ✅ ALWAYS use the BACKEND origin for photos
-  // The backend stores photos at /uploads/ on the backend server
   if (photo.startsWith('/uploads/')) {
     return `${BACKEND_ORIGIN}${photo}`;
   }
   
-  // If it's a relative path, prepend the backend origin
   if (photo.startsWith('/')) {
     return `${BACKEND_ORIGIN}${photo}`;
   }
   
-  // Default: try to use as-is with backend origin
   return `${BACKEND_ORIGIN}/${photo}`;
 }
 
-// Normalize a raw backend submission (snake_case) into the shape the UI expects.
+// Normalize a raw backend submission
 function normalizeSubmission(raw) {
   return {
     id: raw.id,
@@ -116,16 +110,14 @@ async function fetchSubmissions(manual = false) {
     if (response.ok) {
       const raw = await response.json();
       
-      // Debug: log raw data to see what's coming back
       console.log('📥 Raw submissions data:', raw);
       raw.forEach(item => {
         if (item.photo) {
-          console.log('📷 Photo field:', item.photo, 'Type:', typeof item.photo);
+          console.log('📷 Photo field:', item.photo);
           console.log('📷 Resolved photo URL:', resolvePhotoUrl(item.photo));
         }
       });
 
-      // Normalize field names and preserve each item's local "read" flag across refreshes.
       const normalized = raw.map(item => {
         const existing = submissions.find(s => s.id === item.id);
         const n = normalizeSubmission(item);
@@ -133,7 +125,6 @@ async function fetchSubmissions(manual = false) {
         return n;
       });
 
-      // Check for new submissions
       if (normalized.length > lastFetchCount && lastFetchCount > 0) {
         const newSubmissions = normalized.slice(0, normalized.length - lastFetchCount);
         newSubmissions.forEach(sub => {
@@ -165,7 +156,6 @@ async function fetchSubmissions(manual = false) {
   }
 }
 
-// Toggle the refresh button's loading state
 function setRefreshLoading(loading) {
   const btn = document.getElementById('refreshBtn');
   if (!btn) return;
@@ -175,18 +165,15 @@ function setRefreshLoading(loading) {
     : '<span class="cod-refresh-icon">🔄</span> Refresh';
 }
 
-// Briefly shake the notification bell to draw the eye to new activity
 function ringBell() {
   const bell = document.getElementById('notificationBell');
   if (!bell) return;
   bell.classList.remove('cod-ring');
-  // Force reflow so the animation can restart if it's already mid-way
   void bell.offsetWidth;
   bell.classList.add('cod-ring');
   setTimeout(() => bell.classList.remove('cod-ring'), 650);
 }
 
-// Update the "last updated" timestamp shown next to the refresh button
 function updateLastRefreshedLabel() {
   const el = document.getElementById('lastUpdated');
   if (!el) return;
@@ -194,7 +181,6 @@ function updateLastRefreshedLabel() {
   el.textContent = `Updated ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
 }
 
-// Play notification sound
 function playNotificationSound() {
   try {
     const audio = new Audio('data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF');
@@ -203,13 +189,11 @@ function playNotificationSound() {
   } catch (e) {}
 }
 
-// Save submissions to localStorage (cache)
 function saveSubmissions() {
   localStorage.setItem('studentSubmissions', JSON.stringify(submissions));
   updateNotificationBadge();
 }
 
-// Load submissions from localStorage
 function loadSubmissions() {
   const saved = localStorage.getItem('studentSubmissions');
   if (saved) {
@@ -221,7 +205,6 @@ function loadSubmissions() {
   fetchSubmissions();
 }
 
-// Update notification badge
 function updateNotificationBadge() {
   const badge = document.getElementById('notificationBadge');
   const pending = submissions.filter(s => s.status === 'pending' && !s.read).length;
@@ -238,13 +221,10 @@ function updateNotificationBadge() {
   }
 }
 
-// Add new submission (used for manually injected submissions, e.g. via websockets/webhooks)
 function addSubmission(data) {
   const normalized = normalizeSubmission(data);
-
   const exists = submissions.some(s => s.id === normalized.id ||
     (s.fullName === normalized.fullName && s.email === normalized.email));
-
   if (!exists) {
     submissions.unshift(normalized);
     lastFetchCount = submissions.length;
@@ -256,11 +236,9 @@ function addSubmission(data) {
   }
 }
 
-// Show notification toast
 function showNotification(message) {
   const container = document.getElementById('notificationContainer');
   if (!container) return;
-
   const toast = document.createElement('div');
   toast.className = 'notification-toast';
   toast.innerHTML = `
@@ -271,7 +249,6 @@ function showNotification(message) {
     </div>
   `;
   container.appendChild(toast);
-
   setTimeout(() => {
     if (toast.parentElement) {
       toast.style.opacity = '0';
@@ -281,11 +258,9 @@ function showNotification(message) {
   }, 5000);
 }
 
-// Update status in backend.
 async function updateStatus(id, status) {
   const methods = ['PUT', 'PATCH', 'POST'];
   let lastError = 'Unknown error';
-
   for (const method of methods) {
     try {
       const response = await fetch(`${API_URL}/${id}`, {
@@ -300,12 +275,10 @@ async function updateStatus(id, status) {
       lastError = `Network error on ${method}: ${error.message}`;
     }
   }
-
   console.error('Error updating status:', lastError);
   return { ok: false, error: lastError };
 }
 
-// Delete from backend
 async function deleteSubmission(id) {
   try {
     const response = await fetch(`${API_URL}/${id}`, {
@@ -319,7 +292,6 @@ async function deleteSubmission(id) {
   }
 }
 
-// Update a stat number, popping it with a small scale animation if it changed
 function setStatValue(el, newValue) {
   if (!el) return;
   const current = el.textContent;
@@ -340,7 +312,6 @@ function renderSubmissionsList() {
   const approved = submissions.filter(s => s.status === 'approved');
   const rejected = submissions.filter(s => s.status === 'rejected');
 
-  // Update stats
   const totalEl = document.getElementById('totalCount');
   const pendingEl = document.getElementById('pendingCount');
   const approvedEl = document.getElementById('approvedCount');
@@ -361,10 +332,7 @@ function renderSubmissionsList() {
   }
 
   list.innerHTML = submissions.map((sub, index) => {
-    // Resolve photo URL before rendering
     const photoUrl = resolvePhotoUrl(sub.photo);
-    console.log(`🖼️ Rendering photo for ${sub.fullName}:`, photoUrl);
-    
     return `
     <div class="submission-card cod-card-enter ${sub.status === 'pending' ? 'pending' : ''} ${sub.status === 'approved' ? 'approved' : ''} ${sub.status === 'rejected' ? 'rejected' : ''}" data-id="${sub.id}" style="animation-delay:${Math.min(index, 8) * 60}ms">
       <div class="submission-header">
@@ -425,8 +393,6 @@ function renderSubmissionsList() {
 
 // --- Handle Actions ---
 window.handleAction = async function(rawId, action) {
-  // Backend ids are numeric but arrive here as strings via the onclick attribute,
-  // so compare loosely by string form rather than strict equality.
   const sub = submissions.find(s => String(s.id) === String(rawId));
   if (!sub) return;
   const id = sub.id;
@@ -444,7 +410,6 @@ window.handleAction = async function(rawId, action) {
         updateNotificationBadge();
         showNotification(`✅ Approved: ${sub.fullName}`);
         playNotificationSound();
-        // Re-flash the freshly re-rendered card
         requestAnimationFrame(() => {
           const freshCard = document.querySelector(`.submission-card[data-id="${id}"]`);
           if (freshCard) {
@@ -466,7 +431,6 @@ window.handleAction = async function(rawId, action) {
     case 'delete': {
       if (confirm(`Delete submission from ${sub.fullName}?`)) {
         if (cardEl) cardEl.classList.add('cod-removing');
-        // Let the removal animation play before it actually leaves the list
         await new Promise(resolve => setTimeout(resolve, cardEl ? 240 : 0));
         const result = await deleteSubmission(id);
         if (result.ok) {
@@ -490,7 +454,6 @@ window.handleAction = async function(rawId, action) {
       break;
     }
     case 'certificate':
-      // Populate the certificate form with student data
       state.recipient = sub.fullName;
       state.course = sub.course;
       state.grade = sub.grade;
@@ -518,7 +481,6 @@ window.handleAction = async function(rawId, action) {
   }
 };
 
-// Toggle notifications panel
 window.toggleNotifications = function() {
   const panel = document.getElementById('submissionsPanel');
   if (panel) {
@@ -526,12 +488,10 @@ window.toggleNotifications = function() {
   }
 };
 
-// Refresh submissions
 window.refreshSubmissions = function() {
   fetchSubmissions(true);
 };
 
-// Copy form link
 window.copyFormLink = function(url) {
   navigator.clipboard.writeText(url).then(() => {
     const btns = document.querySelectorAll('[onclick*="copyFormLink"]');
@@ -549,12 +509,9 @@ window.copyFormLink = function(url) {
   });
 };
 
-// Show form link
 function showFormLink() {
   const formUrl = 'https://codstudent.netlify.app/';
-
   if (document.querySelector('.form-link-container')) return;
-
   const container = document.createElement('div');
   container.className = 'form-link-container';
   container.innerHTML = `
@@ -579,7 +536,6 @@ function showFormLink() {
       </p>
     </div>
   `;
-
   const panel = document.querySelector('.panel');
   const notificationBell = document.querySelector('.notification-bell-wrapper');
   if (panel && notificationBell) {
@@ -588,8 +544,6 @@ function showFormLink() {
 }
 
 // --- Animation styles ---
-// Injected at runtime so these work regardless of what's already in style.css.
-// Uses "cod-" prefixed classes/keyframes to avoid colliding with existing rules.
 function injectAnimationStyles() {
   if (document.getElementById('cod-animations')) return;
   const style = document.createElement('style');
@@ -815,11 +769,9 @@ function typewriterAnimation() {
 
   function type() {
     if (!textElement) return;
-
     if (!isDeleting) {
       textElement.textContent = fullText.substring(0, index + 1);
       index++;
-
       if (index === fullText.length) {
         setTimeout(() => {
           isDeleting = true;
@@ -827,23 +779,19 @@ function typewriterAnimation() {
         }, 2000);
         return;
       }
-
       const delay = 30 + Math.random() * 30;
       setTimeout(type, delay);
     } else {
       textElement.textContent = fullText.substring(0, index - 1);
       index--;
-
       if (index === 0) {
         isDeleting = false;
         setTimeout(type, 1000);
         return;
       }
-
       setTimeout(type, 15 + Math.random() * 20);
     }
   }
-
   setTimeout(type, 500);
 }
 
@@ -863,25 +811,32 @@ function logoSvg(x, y, width = 100, height = 82) {
   return `<g transform="translate(${x} ${y})"><rect x="-35" y="-32" width="70" height="64" rx="3" fill="#fff" stroke="#2923b9" stroke-width="4"/><text y="-4" text-anchor="middle" font-family="Arial" font-size="16" font-weight="700" fill="#2521ad">COD</text><text y="14" text-anchor="middle" font-family="Arial" font-size="7" font-weight="700" fill="#e91b78">ART &amp; MUSIC</text></g>`;
 }
 
-// Per-certificate-type copy: title shown at the top, seal text, the completion
-// line, and the closing "qualifies / recognition" line.
 const certificateCopy = {
   merit: {
     title: 'Certificate of Merit',
     seal: 'MERIT',
+    presentedLine: 'This certificate is proudly presented to',
     completionLine: 'For the successful completion of',
+    showGrade: true,
+    showYear: true,
     closingLine: 'And has qualified for the next grade',
   },
-  excellence: {
-    title: 'Certificate of Excellence',
-    seal: 'EXCELLENCE',
+  completion: {
+    title: 'Certificate of Completion',
+    seal: 'COMPLETION',
+    presentedLine: 'This certificate is proudly awarded to',
     completionLine: 'For the successful completion of',
+    showGrade: false,
+    showYear: true,
     closingLine: 'And has qualified for the next grade',
   },
   attendance: {
     title: 'Certificate of Attendance',
     seal: 'ATTENDANCE',
+    presentedLine: 'This certificate is proudly presented to',
     completionLine: 'For dedicated attendance and participation in',
+    showGrade: true,
+    showYear: false,
     closingLine: 'In recognition of their consistent commitment',
   },
 }
@@ -896,21 +851,43 @@ function signatureBlock(x, dy, signatureKey, name, fallback) {
 
 function certificateSvg(kind) {
   const copy = certificateCopy[kind] || certificateCopy.merit;
-  const { title, seal, completionLine, closingLine } = copy;
+  const { title, seal, presentedLine, completionLine, showGrade, showYear, closingLine } = copy;
+
+  const courseLine = showGrade
+    ? `Grade <tspan id="svg-grade">${value('grade', '___')}</tspan> of <tspan id="svg-course">${value('course', '_______')}</tspan> Course`
+    : `<tspan id="svg-course">${value('course', '_______')}</tspan> Course`;
+
+  const dateLine = showYear
+    ? `on this day <tspan id="svg-day">${value('day', '__')}</tspan> of year <tspan id="svg-year">${value('year', '____')}</tspan>`
+    : `on this day <tspan id="svg-day">${value('day', '__')}</tspan>`;
+
   return `<svg class="document-svg" id="certificate" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 790" role="img" aria-label="${title}">
     <defs><linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17175c"/><stop offset=".5" stop-color="#252a91"/><stop offset="1" stop-color="#071271"/></linearGradient><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9c6c0f"/><stop offset=".5" stop-color="#fff19a"/><stop offset="1" stop-color="#b7801d"/></linearGradient><radialGradient id="red"><stop stop-color="#d53a32"/><stop offset="1" stop-color="#9c1515"/></radialGradient></defs>
     <rect width="1120" height="790" fill="#fff"/><path d="M0 0H336L198 395l138 395H0Z" fill="url(#ribbon)"/><path d="M130 0H336L198 395l138 395H130Z" fill="#2336af" opacity=".3"/><path d="M0 0h60l138 395L60 790H0Z" fill="#fff" opacity=".05"/><path d="M336 0 198 395l138 395" fill="none" stroke="url(#gold)" stroke-width="4"/>
     <g transform="translate(238 346)"><circle r="62" fill="url(#gold)" stroke="#865a10" stroke-width="2"/><circle r="44" fill="none" stroke="#865a10" stroke-width="3"/><circle r="34" fill="#f7da62" stroke="#ffe78c"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="9" font-weight="700" fill="#754b05">${seal}</text></g>
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".55" transform="translate(120 170)">${Array.from({ length: 11 }, (_, i) => `<path d="M-30 ${i * 6}C100 ${-84 + i * 6} 250 ${-82 + i * 6} 310 ${28 + i * 6}S212 ${240 + i * 6} 28 ${154 + i * 6}"/>`).join('')}</g>
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".5" transform="translate(740 470)">${Array.from({ length: 9 }, (_, i) => `<path d="M${20 - i * 6} ${i * 6}C100 ${-142 + i * 6} 280 ${-170 + i * 6} 378 ${-62 + i * 6}S384 ${74 + i * 6} 286 ${100 + i * 6}"/>`).join('')}</g>
-    <g transform="translate(560 0)" text-anchor="middle">${logoSvg(0, 92, 108, 86)}<text y="226" font-family="Georgia,serif" font-size="45" font-weight="700" fill="#282a8f">${title}</text><text y="280" font-family="Arial" font-size="20" fill="#ee2424">This certificate is proudly presented to</text><text id="svg-recipient" y="350" font-family="Georgia,serif" font-size="39" font-weight="700" fill="#1e1e1e">${value('recipient', 'Recipient Name')}</text><line x1="-210" y1="370" x2="210" y2="370" stroke="#1e1e1e"/><text y="414" font-family="Arial" font-size="17" font-weight="700">${completionLine}</text><text y="466" font-family="Arial" font-size="17">Grade <tspan id="svg-grade">${value('grade', '___')}</tspan> of <tspan id="svg-course">${value('course', '_______')}</tspan> Course</text><text y="506" font-family="Arial" font-size="17">on this day <tspan id="svg-day">${value('day', '__')}</tspan> of year <tspan id="svg-year">${value('year', '____')}</tspan></text><text y="556" font-family="Arial" font-size="20" font-weight="700" fill="#2a3192">${closingLine}</text><g transform="translate(0 690)" font-family="Georgia,serif" font-size="13">${signatureBlock(-225, 0, 'coordinatorSignature', 'coordinator', 'Training Coordinator')}${signatureBlock(225, 0, 'directorSignature', 'director', 'Director')}</g></g><g transform="translate(560 718)"><circle r="52" fill="url(#red)"/><circle r="40" fill="none" stroke="#781010"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="10" font-weight="700" fill="#fff">${seal}</text></g>
+    <g transform="translate(560 0)" text-anchor="middle">${logoSvg(0, 92, 108, 86)}<text y="226" font-family="Georgia,serif" font-size="45" font-weight="700" fill="#282a8f">${title}</text><text y="280" font-family="Arial" font-size="20" fill="#ee2424">${presentedLine}</text><text id="svg-recipient" y="350" font-family="Georgia,serif" font-size="39" font-weight="700" fill="#1e1e1e">${value('recipient', 'Recipient Name')}</text><line x1="-210" y1="370" x2="210" y2="370" stroke="#1e1e1e"/><text y="414" font-family="Arial" font-size="17" font-weight="700">${completionLine}</text><text y="466" font-family="Arial" font-size="17">${courseLine}</text><text y="506" font-family="Arial" font-size="17">${dateLine}</text><text y="556" font-family="Arial" font-size="20" font-weight="700" fill="#2a3192">${closingLine}</text><g transform="translate(0 690)" font-family="Georgia,serif" font-size="13">${signatureBlock(-225, 0, 'coordinatorSignature', 'coordinator', 'Training Coordinator')}${signatureBlock(225, 0, 'directorSignature', 'director', 'Director')}</g></g><g transform="translate(560 718)"><circle r="52" fill="url(#red)"/><circle r="40" fill="none" stroke="#781010"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="10" font-weight="700" fill="#fff">${seal}</text></g>
   </svg>`;
 }
 
+// ============================================
+// ✅ IMPROVED ID CARD SVG WITH BETTER PHOTO POSITIONING
+// ============================================
 function idCardSvg() {
+  // Handle photo element with improved sizing
   let photoElement = '';
   if (state.photo && state.photo !== '') {
-    photoElement = `<image href="${state.photo}" x="180" y="196" width="200" height="200" preserveAspectRatio="xMidYMid slice" clip-path="url(#photo)"/>`;
+    photoElement = `
+      <image 
+        href="${state.photo}" 
+        x="170" 
+        y="186" 
+        width="220" 
+        height="220" 
+        preserveAspectRatio="xMidYMid slice" 
+        clip-path="url(#photo)"
+      />`;
   } else {
     photoElement = `
       <circle cx="280" cy="296" r="100" fill="#edf0f6"/>
@@ -936,43 +913,81 @@ function idCardSvg() {
 
     <rect width="1120" height="760" fill="#e9edf5"/>
 
+    <!-- FRONT SIDE -->
     <g transform="translate(30 48)">
       <rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/>
       <path d="M0 0h510v190c-135 25-287-15-510 18Z" fill="url(#blue)"/>
       <path d="M0 18c115 32 230-5 365 25 70 15 105 6 145-8v35C355 105 190 62 0 78Z" fill="#fff" opacity=".15"/>
+      
+      <!-- Logo -->
       <g transform="translate(255 65)">${logoSvg(0, 0, 85, 65)}</g>
+      
+      <!-- Title text -->
       <text x="255" y="148" text-anchor="middle" font-family="Arial" font-size="22" font-weight="700" fill="#fff">CLAN OF DAVID</text>
       <text x="255" y="173" text-anchor="middle" font-family="Arial" font-size="14" fill="#fff">ART AND MUSIC ACADEMY</text>
+      
+      <!-- ✅ IMPROVED: Photo frame with better sizing and positioning -->
+      <!-- Outer decorative ring -->
       <circle cx="280" cy="296" r="118" fill="#fff" stroke="#781f5e" stroke-width="6"/>
+      
+      <!-- Inner photo circle with lighter background -->
       <circle cx="280" cy="296" r="108" fill="#f0f4f9" stroke="#e0e5ed" stroke-width="2"/>
-      <g clip-path="url(#photo)">${photoElement}</g>
+      
+      <!-- Photo content with improved clipping and positioning -->
+      <g clip-path="url(#photo)">
+        ${state.photo && state.photo !== '' ? `
+          <!-- ✅ IMPROVED: Better image sizing and centering -->
+          <image 
+            href="${state.photo}" 
+            x="170" 
+            y="186" 
+            width="220" 
+            height="220" 
+            preserveAspectRatio="xMidYMid slice"
+          />
+        ` : `
+          <circle cx="280" cy="296" r="100" fill="#edf0f6"/>
+          <text x="280" y="292" text-anchor="middle" font-family="Arial" font-size="20" font-weight="700" fill="#9ca3af">PHOTO</text>
+          <text x="280" y="312" text-anchor="middle" font-family="Arial" font-size="10" fill="#9ca3af">(passport size)</text>
+        `}
+      </g>
+      
+      <!-- Details section -->
       <g font-family="Arial" font-size="18" fill="#172f83" font-weight="700">
         <text x="70" y="475">Name:</text>
         <text x="170" y="475" fill="#1e1e1e" font-weight="400">${value('recipient', '______________________')}</text>
         <line x1="168" y1="482" x2="440" y2="482" stroke="#1e1e1e" stroke-dasharray="2,2"/>
+        
         <text x="70" y="525">Course:</text>
         <text x="170" y="525" fill="#1e1e1e" font-weight="400">${value('course', '______________________')}</text>
         <line x1="168" y1="532" x2="440" y2="532" stroke="#1e1e1e" stroke-dasharray="2,2"/>
+        
         <text x="70" y="575">Grade:</text>
         <text x="170" y="575" fill="#1e1e1e" font-weight="400">${value('grade', '______________________')}</text>
         <line x1="168" y1="582" x2="440" y2="582" stroke="#1e1e1e" stroke-dasharray="2,2"/>
+        
         <text x="55" y="625">Student ID:</text>
         <text x="180" y="625" fill="#1e1e1e" font-weight="400">${value('studentId', '______________________')}</text>
         <line x1="178" y1="632" x2="440" y2="632" stroke="#1e1e1e" stroke-dasharray="2,2"/>
       </g>
     </g>
 
+    <!-- BACK SIDE -->
     <g transform="translate(580 48)">
       <rect width="510" height="664" rx="16" fill="#fff" stroke="#d9deeb" stroke-width="2"/>
       <path d="M0 0h510v105c-140 24-270-30-510 5Z" fill="url(#blue)"/>
       <path d="M0 570c160-50 280 38 510-10v154H0Z" fill="url(#blue)"/>
       <path d="M0 600c180-45 295 32 510-15v50C280 680 145 622 0 652Z" fill="url(#pink)"/>
+      
       <text x="255" y="185" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">This is to certify that the person</text>
       <text x="255" y="215" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">whose name and photo appears</text>
       <text x="255" y="245" text-anchor="middle" font-family="Arial" font-size="18" fill="#333">on the over leaf is a student of</text>
+      
       <text x="255" y="315" text-anchor="middle" font-family="Arial" font-size="29" font-weight="700">CLAN OF DAVID</text>
       <text x="255" y="345" text-anchor="middle" font-family="Arial" font-size="18">ART AND MUSIC ACADEMY</text>
+      
       <text x="255" y="405" text-anchor="middle" font-family="Arial" font-size="19">${value('phone', '+234 706 809 8651')}</text>
+      
       <text x="255" y="465" text-anchor="middle" font-family="Arial" font-size="17">This card must be</text>
       <text x="255" y="492" text-anchor="middle" font-family="Arial" font-size="17">surrendered at the end of student session.</text>
       <text x="255" y="540" text-anchor="middle" font-family="Arial" font-size="17">If found please return to the address above</text>
@@ -1069,7 +1084,6 @@ function renderPreview() {
 
 async function downloadDocument() {
   const isId = state.type === 'idcard';
-
   if (isId) {
     await downloadIdCardPDF();
   } else {
