@@ -35,9 +35,9 @@ const state = {
   phone: '',
 }
 
-// Default signature paths (relative to public folder)
-const DEFAULT_COORD_SIG = '/images/cod_signature.jpg';
-const DEFAULT_DIRECTOR_SIG = '/images/codsign2.jpg';
+// Default signature paths (relative to public folder) - UPDATED TO PNG
+const DEFAULT_COORD_SIG = '/images/cod_signature.png';
+const DEFAULT_DIRECTOR_SIG = '/images/codsign2.png';
 
 const certificateFields = [
   ['recipient', 'Recipient name', 'e.g. Ben Glory'],
