@@ -254,7 +254,7 @@ function updateLastRefreshedLabel() {
 
 function playNotificationSound() {
   try {
-    const audio = new Audio('data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF');
+    const audio = new Audio('data:audio/wav;base64,UklGRnoAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoAAACBhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqFhYqF');
     audio.volume = 0.3;
     audio.play().catch(() => {});
   } catch (e) {}
@@ -890,7 +890,8 @@ const certificateCopy = {
     completionLine: 'For the successful completion of',
     showGrade: true,
     showYear: true,
-    closingLine: 'And has qualified for the next grade',
+    // REMOVED: closingLine: 'And has qualified for the next grade',
+    closingLine: '', // empty – line will not be rendered
   },
   completion: {
     title: 'Certificate of Completion',
@@ -899,7 +900,8 @@ const certificateCopy = {
     completionLine: 'For the successful completion of',
     showGrade: false,
     showYear: true,
-    closingLine: 'And has qualified for the next grade',
+    // REMOVED: closingLine: 'And has qualified for the next grade',
+    closingLine: '',
   },
   attendance: {
     title: 'Certificate of Attendance',
@@ -932,13 +934,18 @@ function certificateSvg(kind) {
     ? `on this day <tspan id="svg-day">${value('day', '__')}</tspan> of year <tspan id="svg-year">${value('year', '____')}</tspan>`
     : `on this day <tspan id="svg-day">${value('day', '__')}</tspan>`;
 
+  // Conditionally render the closing line only if it has content
+  const closingLineElement = closingLine
+    ? `<text y="556" font-family="Arial" font-size="20" font-weight="700" fill="#2a3192">${closingLine}</text>`
+    : '';
+
   return `<svg class="document-svg" id="certificate" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 790" role="img" aria-label="${title}">
     <defs><linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#17175c"/><stop offset=".5" stop-color="#252a91"/><stop offset="1" stop-color="#071271"/></linearGradient><linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9c6c0f"/><stop offset=".5" stop-color="#fff19a"/><stop offset="1" stop-color="#b7801d"/></linearGradient><radialGradient id="red"><stop stop-color="#d53a32"/><stop offset="1" stop-color="#9c1515"/></radialGradient></defs>
     <rect width="1120" height="790" fill="#fff"/><path d="M0 0H336L198 395l138 395H0Z" fill="url(#ribbon)"/><path d="M130 0H336L198 395l138 395H130Z" fill="#2336af" opacity=".3"/><path d="M0 0h60l138 395L60 790H0Z" fill="#fff" opacity=".05"/><path d="M336 0 198 395l138 395" fill="none" stroke="url(#gold)" stroke-width="4"/>
     <g transform="translate(238 346)"><circle r="62" fill="url(#gold)" stroke="#865a10" stroke-width="2"/><circle r="44" fill="none" stroke="#865a10" stroke-width="3"/><circle r="34" fill="#f7da62" stroke="#ffe78c"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="9" font-weight="700" fill="#754b05">${seal}</text></g>
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".55" transform="translate(120 170)">${Array.from({ length: 11 }, (_, i) => `<path d="M-30 ${i * 6}C100 ${-84 + i * 6} 250 ${-82 + i * 6} 310 ${28 + i * 6}S212 ${240 + i * 6} 28 ${154 + i * 6}"/>`).join('')}</g>
     <g fill="none" stroke="#4c91f2" stroke-width="1.4" opacity=".5" transform="translate(740 470)">${Array.from({ length: 9 }, (_, i) => `<path d="M${20 - i * 6} ${i * 6}C100 ${-142 + i * 6} 280 ${-170 + i * 6} 378 ${-62 + i * 6}S384 ${74 + i * 6} 286 ${100 + i * 6}"/>`).join('')}</g>
-    <g transform="translate(560 0)" text-anchor="middle">${logoSvg(0, 92, 108, 86)}<text y="226" font-family="Georgia,serif" font-size="45" font-weight="700" fill="#282a8f">${title}</text><text y="280" font-family="Arial" font-size="20" fill="#ee2424">${presentedLine}</text><text id="svg-recipient" y="350" font-family="Georgia,serif" font-size="39" font-weight="700" fill="#1e1e1e">${value('recipient', 'Recipient Name')}</text><line x1="-210" y1="370" x2="210" y2="370" stroke="#1e1e1e"/><text y="414" font-family="Arial" font-size="17" font-weight="700">${completionLine}</text><text y="466" font-family="Arial" font-size="17">${courseLine}</text><text y="506" font-family="Arial" font-size="17">${dateLine}</text><text y="556" font-family="Arial" font-size="20" font-weight="700" fill="#2a3192">${closingLine}</text><g transform="translate(0 690)" font-family="Georgia,serif" font-size="13">${signatureBlock(-225, 0, 'coordinatorSignature', 'coordinator', 'Training Coordinator')}${signatureBlock(225, 0, 'directorSignature', 'director', 'Director')}</g></g><g transform="translate(560 718)"><circle r="52" fill="url(#red)"/><circle r="40" fill="none" stroke="#781010"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="10" font-weight="700" fill="#fff">${seal}</text></g>
+    <g transform="translate(560 0)" text-anchor="middle">${logoSvg(0, 92, 108, 86)}<text y="226" font-family="Georgia,serif" font-size="45" font-weight="700" fill="#282a8f">${title}</text><text y="280" font-family="Arial" font-size="20" fill="#ee2424">${presentedLine}</text><text id="svg-recipient" y="350" font-family="Georgia,serif" font-size="39" font-weight="700" fill="#1e1e1e">${value('recipient', 'Recipient Name')}</text><line x1="-210" y1="370" x2="210" y2="370" stroke="#1e1e1e"/><text y="414" font-family="Arial" font-size="17" font-weight="700">${completionLine}</text><text y="466" font-family="Arial" font-size="17">${courseLine}</text><text y="506" font-family="Arial" font-size="17">${dateLine}</text>${closingLineElement}<g transform="translate(0 690)" font-family="Georgia,serif" font-size="13">${signatureBlock(-225, 0, 'coordinatorSignature', 'coordinator', 'Training Coordinator')}${signatureBlock(225, 0, 'directorSignature', 'director', 'Director')}</g></g><g transform="translate(560 718)"><circle r="52" fill="url(#red)"/><circle r="40" fill="none" stroke="#781010"/><text text-anchor="middle" dominant-baseline="central" font-family="Arial" font-size="10" font-weight="700" fill="#fff">${seal}</text></g>
   </svg>`;
 }
 
@@ -1080,6 +1087,8 @@ function renderForm() {
   const isId = state.type === 'idcard';
   const fields = isId ? idFields : certificateFields;
 
+  // ---- REMOVED signature upload fields ----
+  // Only keep photo upload for ID card
   let uploadHtml = '';
   if (isId) {
     uploadHtml = `<div class="upload-grid">
@@ -1089,20 +1098,8 @@ function renderForm() {
         <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Upload a clear passport-style photo</small>
       </label>
     </div>`;
-  } else {
-    uploadHtml = `<div class="upload-grid">
-      <label class="upload-field">
-        <span>Coordinator Signature</span>
-        <input id="coordinator-signature-input" type="file" accept="image/*"/>
-        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Background will be removed automatically</small>
-      </label>
-      <label class="upload-field">
-        <span>Director Signature</span>
-        <input id="director-signature-input" type="file" accept="image/*"/>
-        <small style="color: #6b7280; font-size: 11px; margin-top: 4px;">Background will be removed automatically</small>
-      </label>
-    </div>`;
   }
+  // No signature uploads for certificates
 
   form.innerHTML = `${uploadHtml}${fields.map(([id, label, placeholder]) => `<label class="field"><span>${label}</span><input id="in-${id}" type="text" placeholder="${placeholder}" value="${state[id]}"/></label>`).join('')}<button type="button" id="download" class="download">Download ${isId ? 'ID card (PDF with front & back)' : 'certificate'}</button>`;
 
@@ -1116,40 +1113,11 @@ function renderForm() {
     }
   });
 
-  // Photo input handler
+  // Photo input handler (only for ID card)
   const photoInput = document.querySelector('#photo-input');
   if (photoInput) photoInput.addEventListener('change', event => readImage(event, 'photo'));
 
-  // Signature input handlers with background removal
-  const coordinatorSignatureInput = document.querySelector('#coordinator-signature-input');
-  if (coordinatorSignatureInput) {
-    coordinatorSignatureInput.addEventListener('change', async (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.addEventListener('load', async () => {
-        const cleanedSignature = await removeBackground(String(reader.result));
-        state.coordinatorSignature = cleanedSignature;
-        renderPreview();
-      });
-      reader.readAsDataURL(file);
-    });
-  }
-
-  const directorSignatureInput = document.querySelector('#director-signature-input');
-  if (directorSignatureInput) {
-    directorSignatureInput.addEventListener('change', async (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.addEventListener('load', async () => {
-        const cleanedSignature = await removeBackground(String(reader.result));
-        state.directorSignature = cleanedSignature;
-        renderPreview();
-      });
-      reader.readAsDataURL(file);
-    });
-  }
+  // ---- REMOVED signature input handlers ----
 
   const downloadBtn = document.querySelector('#download');
   if (downloadBtn) downloadBtn.addEventListener('click', downloadDocument);
