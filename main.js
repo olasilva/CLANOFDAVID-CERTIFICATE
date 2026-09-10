@@ -890,8 +890,7 @@ const certificateCopy = {
     completionLine: 'For the successful completion of',
     showGrade: true,
     showYear: true,
-    // REMOVED: closingLine: 'And has qualified for the next grade',
-    closingLine: '', // empty – line will not be rendered
+    closingLine: 'And has qualified for the next grade', // restored for Merit
   },
   completion: {
     title: 'Certificate of Completion',
@@ -900,8 +899,7 @@ const certificateCopy = {
     completionLine: 'For the successful completion of',
     showGrade: false,
     showYear: true,
-    // REMOVED: closingLine: 'And has qualified for the next grade',
-    closingLine: '',
+    closingLine: '', // removed only for Completion
   },
   attendance: {
     title: 'Certificate of Attendance',
@@ -910,7 +908,7 @@ const certificateCopy = {
     completionLine: 'For dedicated attendance and participation in',
     showGrade: true,
     showYear: false,
-    closingLine: 'In recognition of their consistent commitment',
+    closingLine: 'In recognition of their consistent commitment', // unchanged
   },
 }
 
